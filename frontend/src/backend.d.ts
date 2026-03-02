@@ -14,13 +14,16 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
+export type CharacterId = number;
 export interface Character {
     xp: bigint;
     dex: bigint;
     int: bigint;
     str: bigint;
     vit: bigint;
+    maxHP: bigint;
     status: CharacterStatus;
+    currentHP: bigint;
     name: string;
     season: bigint;
     level: bigint;
@@ -52,7 +55,8 @@ export interface UserProfile {
 }
 export enum CharacterCreationError {
     noPermission = "noPermission",
-    alreadyExists = "alreadyExists"
+    alreadyExists = "alreadyExists",
+    limitReached = "limitReached"
 }
 export enum CharacterStatus {
     Dead = "Dead",
@@ -73,6 +77,12 @@ export enum Realm {
     Hardcore = "Hardcore",
     Softcore = "Softcore"
 }
+export enum SetHpError {
+    noPermission = "noPermission",
+    characterNotFound = "characterNotFound",
+    maxHPExceeded = "maxHPExceeded",
+    alreadyFullHP = "alreadyFullHP"
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -83,14 +93,15 @@ export interface backendInterface {
     buyItem(itemId: string): Promise<void>;
     createCharacter(name: string, realm: Realm): Promise<{
         __kind__: "ok";
-        ok: null;
+        ok: CharacterId;
     } | {
         __kind__: "err";
         err: CharacterCreationError;
     }>;
+    deleteCharacter(characterId: CharacterId): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
-    getCharacter(): Promise<Character | null>;
+    getCharacters(): Promise<Array<Character>>;
     getItem(itemId: string): Promise<Item | null>;
     getItemImage(itemId: string): Promise<ExternalBlob>;
     getMarketplaceListings(): Promise<Array<MarketplaceListing>>;
@@ -98,6 +109,12 @@ export interface backendInterface {
     isCallerAdmin(): Promise<boolean>;
     listItemForSale(itemId: string, price: bigint): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    submitDungeonResult(xpGained: bigint): Promise<void>;
+    setCharacterHp(characterId: CharacterId, hp: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: SetHpError;
+    }>;
     uploadItemImage(itemId: string, externalBlob: ExternalBlob): Promise<void>;
 }

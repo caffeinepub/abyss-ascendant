@@ -1,56 +1,26 @@
 import Map "mo:core/Map";
 import Array "mo:core/Array";
+import List "mo:core/List";
 import Principal "mo:core/Principal";
 import Runtime "mo:core/Runtime";
-import Iter "mo:core/Iter";
-import Nat "mo:core/Nat";
+import Nat8 "mo:core/Nat8";
 import Text "mo:core/Text";
-
-
-import Storage "blob-storage/Storage";
+import Iter "mo:core/Iter";
 import MixinStorage "blob-storage/Mixin";
+import Storage "blob-storage/Storage";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
+import Migration "migration";
 
-
+(with migration = Migration.run)
 actor {
-  let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
-  include MixinStorage();
-
-  // ── User profiles (required by frontend) ──
-
-  public type UserProfile = {
-    username : Text;
-  };
-
-  let userProfiles = Map.empty<Principal, UserProfile>();
-
-  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can get their profile");
-    };
-    userProfiles.get(caller);
-  };
-
-  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own profile");
-    };
-    userProfiles.get(user);
-  };
-
-  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
-    };
-    userProfiles.add(caller, profile);
-  };
-
-  // ── Game types ──
+  public type UserProfile = { username : Text };
 
   public type Realm = { #Softcore; #Hardcore };
   public type CharacterStatus = { #Alive; #Dead };
+
+  public type ItemType = { #Weapon; #Armor; #Trinket };
+  public type Rarity = { #Common; #Uncommon; #Rare; #Legendary };
 
   public type Character = {
     name : Text;
@@ -64,14 +34,8 @@ actor {
     dex : Nat;
     int : Nat;
     vit : Nat;
-  };
-
-  public type ItemType = { #Weapon; #Armor; #Trinket };
-  public type Rarity = {
-    #Common;
-    #Uncommon;
-    #Rare;
-    #Legendary;
+    maxHP : Nat;
+    currentHP : Nat;
   };
 
   public type Item = {
@@ -96,32 +60,78 @@ actor {
     active : Bool;
   };
 
-  // ── Character creation ──
-
-  public type CharacterCreationError = {
-    #alreadyExists;
+  public type CharacterCreationError = { #alreadyExists; #noPermission; #limitReached };
+  public type SetHpError = {
+    #characterNotFound;
     #noPermission;
+    #alreadyFullHP;
+    #maxHPExceeded;
   };
 
-  // ── Game state ──
+  type CharacterId = Nat8;
+  type CharacterSlot = { id : CharacterId; character : Character };
+  type CharacterIds = CharacterId;
+  public type CharStorage = Map.Map<CharacterIds, Character>;
+  type CharSlotStorage = List.List<CharacterSlot>;
+  type CharPersistentStorage = Map.Map<Principal, CharSlotStorage>;
+  type ItemPersistentStorage = Map.Map<Text, Item>;
+  type MarketplaceStorage = Map.Map<Text, MarketplaceListing>;
+  type ItemArray = [Item];
 
   var currentSeason = 1;
-  let characters = Map.empty<Principal, Character>();
-  let items = Map.empty<Text, Item>();
-  let marketplace = Map.empty<Text, MarketplaceListing>();
+  var nextCharacterId : Nat8 = 0;
+  var characters : CharPersistentStorage = Map.empty<Principal, CharSlotStorage>();
+  var items : ItemPersistentStorage = Map.empty<Text, Item>();
+  var marketplace : MarketplaceStorage = Map.empty<Text, MarketplaceListing>();
 
-  // ── Character functions ──
+  let accessControlState = AccessControl.initState();
+  include MixinAuthorization(accessControlState);
+  let itemImages = Map.empty<Text, Storage.ExternalBlob>();
+  let userProfiles = Map.empty<Principal, UserProfile>();
+  include MixinStorage();
+
+  func getNextCharacterId() : CharacterId {
+    let newId = nextCharacterId;
+    nextCharacterId += 1;
+    newId;
+  };
+
+  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can get their profile");
+    };
+    userProfiles.get(caller);
+  };
+
+  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own profile");
+    };
+    userProfiles.get(user);
+  };
+
+  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can save profiles");
+    };
+    userProfiles.add(caller, profile);
+  };
 
   public shared ({ caller }) func createCharacter(name : Text, realm : Realm) : async {
-    #ok : ();
+    #ok : CharacterId;
     #err : CharacterCreationError;
   } {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       return #err(#noPermission);
     };
-    if (characters.containsKey(caller)) { return #err(#alreadyExists) };
 
-    let character : Character = {
+    let existingCharacters = switch (characters.get(caller)) {
+      case (null) { List.empty<CharacterSlot>() };
+      case (?chars) { chars };
+    };
+    if (existingCharacters.size() >= 8) { return #err(#limitReached) };
+
+    let newCharacter : Character = {
       name;
       realm;
       classTier = 1;
@@ -133,26 +143,85 @@ actor {
       dex = 1;
       int = 1;
       vit = 1;
+      maxHP = 20;
+      currentHP = 20;
     };
 
-    characters.add(caller, character);
-    #ok(());
+    let newId = getNextCharacterId();
+    let newSlot : CharacterSlot = { id = newId; character = newCharacter };
+    let updatedCharacters = List.fromArray<CharacterSlot>(existingCharacters.toArray());
+    updatedCharacters.add(newSlot);
+    characters.add(caller, updatedCharacters);
+    #ok(newId);
   };
 
-  public query ({ caller }) func getCharacter() : async ?Character {
+  public shared ({ caller }) func setCharacterHp(characterId : CharacterId, hp : Nat) : async {
+    #ok : ();
+    #err : SetHpError;
+  } {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authenticated users can access their character");
+      return #err(#noPermission);
     };
-    characters.get(caller);
+
+    switch (characters.get(caller)) {
+      case (null) { #err(#characterNotFound) };
+      case (?characterSlots) {
+        var found = false;
+        let updatedSlotsArray = characterSlots.toArray().map(
+          func(slot) {
+            if (slot.id == characterId) {
+              found := true;
+              let character = slot.character;
+              if (hp > character.maxHP) {
+                return { slot with character = { character with currentHP = character.maxHP } };
+              };
+              return { slot with character = { character with currentHP = hp } };
+            };
+            slot;
+          }
+        );
+        if (not found) { return #err(#characterNotFound) };
+        let updatedSlots = List.fromArray<CharacterSlot>(updatedSlotsArray);
+        characters.add(caller, updatedSlots);
+        #ok(());
+      };
+    };
   };
 
-  // ── Item functions ──
+  public shared ({ caller }) func deleteCharacter(characterId : CharacterId) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can delete characters");
+    };
+
+    switch (characters.get(caller)) {
+      case (null) { Runtime.trap("Character not found or unauthorized") };
+      case (?characterSlots) {
+        let filteredSlots = characterSlots.filter(
+          func(slot) {
+            slot.id != characterId;
+          }
+        );
+        if (filteredSlots.size() == characterSlots.size()) {
+          Runtime.trap("Character not found or unauthorized");
+        };
+        characters.add(caller, filteredSlots);
+      };
+    };
+  };
+
+  public query ({ caller }) func getCharacters() : async [Character] {
+    switch (characters.get(caller)) {
+      case (null) { [] };
+      case (?chars) {
+        let charArray = chars.toArray();
+        charArray.map(func(slot) { slot.character });
+      };
+    };
+  };
 
   public query func getItem(itemId : Text) : async ?Item {
     items.get(itemId);
   };
-
-  // ── Marketplace functions ──
 
   public query func getMarketplaceListings() : async [MarketplaceListing] {
     marketplace.values().toArray();
@@ -160,7 +229,7 @@ actor {
 
   public shared ({ caller }) func listItemForSale(itemId : Text, price : Nat) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authenticated users can list items for sale");
+      Runtime.trap("Only authenticated users can list items for sale");
     };
 
     let item = switch (items.get(itemId)) {
@@ -182,7 +251,7 @@ actor {
 
   public shared ({ caller }) func buyItem(itemId : Text) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authenticated users can buy items");
+      Runtime.trap("Only authenticated users can buy items");
     };
 
     let listing = switch (marketplace.get(itemId)) {
@@ -192,53 +261,24 @@ actor {
 
     if (listing.seller == caller) { Runtime.trap("Cannot buy own item") };
 
-    let updatedItem : Item = {
-      listing.item with
-      owner = caller
-    };
-
+    let updatedItem : Item = { listing.item with owner = caller };
     items.add(itemId, updatedItem);
     marketplace.remove(itemId);
   };
 
-  // ── Combat / dungeon functions ──
-
-  public shared ({ caller }) func submitDungeonResult(xpGained : Nat) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authenticated users can submit dungeon results");
-    };
-
-    let character = switch (characters.get(caller)) {
-      case (null) { Runtime.trap("Character does not exist") };
-      case (?character) { character };
-    };
-
-    if (character.status == #Dead) { Runtime.trap("Character is dead") };
-
-    let updatedCharacter : Character = {
-      character with
-      xp = character.xp + xpGained
-    };
-
-    characters.add(caller, updatedCharacter);
-  };
-
-  // ── Item image storage ──
-
-  let itemImages = Map.empty<Text, Storage.ExternalBlob>();
-
   public shared ({ caller }) func uploadItemImage(itemId : Text, externalBlob : Storage.ExternalBlob) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authenticated users can upload item images");
+      Runtime.trap("Only authenticated users can upload item images");
     };
-    let item = switch (items.get(itemId)) {
+    switch (items.get(itemId)) {
       case (null) { Runtime.trap("Item does not exist") };
-      case (?item) { item };
+      case (?item) {
+        if (item.owner != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+          Runtime.trap("Cannot upload image for items you do not own");
+        };
+        itemImages.add(itemId, externalBlob);
+      };
     };
-    if (item.owner != caller and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Cannot upload image for items you do not own");
-    };
-    itemImages.add(itemId, externalBlob);
   };
 
   public query func getItemImage(itemId : Text) : async Storage.ExternalBlob {

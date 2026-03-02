@@ -1,18 +1,23 @@
 import { Rarity } from '../backend';
 
-export type StatKey =
+export type ItemType = 'Weapon' | 'Armor' | 'Trinket';
+
+export type AffixStat =
   | 'str'
   | 'dex'
   | 'int'
   | 'vit'
   | 'hp'
-  | 'physDmg'
-  | 'magDmg'
+  | 'physicalDamage'
+  | 'magicDamage'
   | 'defense'
   | 'critChance';
 
+// Backward-compat alias
+export type StatKey = AffixStat;
+
 export interface ItemAffix {
-  stat: StatKey;
+  stat: AffixStat;
   value: number;
   label: string;
 }
@@ -20,183 +25,266 @@ export interface ItemAffix {
 export interface GeneratedItem {
   id: string;
   name: string;
-  itemType: 'Weapon' | 'Armor' | 'Trinket';
+  itemType: ItemType;
   rarity: Rarity;
   affixes: ItemAffix[];
-  icon: string;
-  /** Base physical damage for Weapon items (non-zero) */
-  baseDamage?: number;
-  /** Base defense for Armor items (non-zero) */
-  baseDefense?: number;
+  icon: string;           // emoji icon for display
+  baseDamage?: number;    // Weapons only
+  baseDefense?: number;   // Armor only
+  itemLevel: number;
 }
 
-// ── Valid affix pool (restricted to 9 valid stats only) ──
-const VALID_AFFIXES: { stat: StatKey; label: string; minVal: number; maxVal: number }[] = [
-  { stat: 'str',       label: '+Strength',        minVal: 1, maxVal: 8 },
-  { stat: 'dex',       label: '+Dexterity',       minVal: 1, maxVal: 8 },
-  { stat: 'int',       label: '+Intelligence',    minVal: 1, maxVal: 8 },
-  { stat: 'vit',       label: '+Vitality',        minVal: 1, maxVal: 8 },
-  { stat: 'hp',        label: '+HP',              minVal: 5, maxVal: 40 },
-  { stat: 'physDmg',   label: '+Physical Damage', minVal: 1, maxVal: 10 },
-  { stat: 'magDmg',    label: '+Magic Damage',    minVal: 1, maxVal: 10 },
-  { stat: 'defense',   label: '+Defense',         minVal: 1, maxVal: 8 },
-  { stat: 'critChance',label: '+Critical Chance', minVal: 1, maxVal: 5 },
-];
+// ── Helpers ──
 
-const ITEM_NAMES: Record<string, string[]> = {
-  Weapon: [
-    'Iron Sword', 'Shadow Blade', 'Bone Staff', 'Elven Bow', 'War Axe',
-    'Cursed Dagger', 'Thunder Mace', 'Void Wand', 'Serrated Knife', 'Runic Hammer',
-  ],
-  Armor: [
-    'Leather Vest', 'Chain Mail', 'Shadow Cloak', 'Iron Plate', 'Bone Armor',
-    'Silk Robe', 'Dragonhide Coat', 'Runic Breastplate', 'Tattered Shroud', 'Warden Cuirass',
-  ],
-  Trinket: [
-    'Amulet of Power', 'Ring of Shadows', 'Cursed Talisman', 'Arcane Pendant',
-    'Blood Stone', 'Void Crystal', 'Rune Charm', 'Bone Fetish', 'Storm Sigil', 'Ember Shard',
-  ],
-};
-
-const RARITY_WEIGHTS = [
-  { rarity: Rarity.Common,    weight: 60 },
-  { rarity: Rarity.Uncommon,  weight: 25 },
-  { rarity: Rarity.Rare,      weight: 12 },
-  { rarity: Rarity.Legendary, weight: 3  },
-];
-
-const RARITY_AFFIX_COUNT: Record<Rarity, number> = {
-  [Rarity.Common]:    1,
-  [Rarity.Uncommon]:  2,
-  [Rarity.Rare]:      3,
-  [Rarity.Legendary]: 4,
-};
-
-// Base damage ranges for weapons by rarity
-const WEAPON_BASE_DAMAGE: Record<Rarity, [number, number]> = {
-  [Rarity.Common]:    [2, 5],
-  [Rarity.Uncommon]:  [5, 10],
-  [Rarity.Rare]:      [10, 18],
-  [Rarity.Legendary]: [18, 30],
-};
-
-// Base defense ranges for armor by rarity
-const ARMOR_BASE_DEFENSE: Record<Rarity, [number, number]> = {
-  [Rarity.Common]:    [1, 3],
-  [Rarity.Uncommon]:  [3, 6],
-  [Rarity.Rare]:      [6, 12],
-  [Rarity.Legendary]: [12, 20],
-};
-
-function randInRange(min: number, max: number): number {
+function rand(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function pickRarity(): Rarity {
-  const total = RARITY_WEIGHTS.reduce((s, r) => s + r.weight, 0);
-  let roll = Math.random() * total;
-  for (const r of RARITY_WEIGHTS) {
-    roll -= r.weight;
-    if (roll <= 0) return r.rarity;
+function randFloat(min: number, max: number): number {
+  return Math.random() * (max - min) + min;
+}
+
+// ── Rarity weights by monster level ──
+
+function getRarityWeights(monsterLevel: number): Record<Rarity, number> {
+  const lvl = Math.max(1, monsterLevel);
+  const legendaryChance = Math.min(0.05, lvl * 0.0004);
+  const rareChance = Math.min(0.15, lvl * 0.001);
+  const uncommonChance = Math.min(0.30, 0.10 + lvl * 0.002);
+  const commonChance = Math.max(0.5, 1 - legendaryChance - rareChance - uncommonChance);
+
+  return {
+    [Rarity.Common]: commonChance,
+    [Rarity.Uncommon]: uncommonChance,
+    [Rarity.Rare]: rareChance,
+    [Rarity.Legendary]: legendaryChance,
+  };
+}
+
+function rollRarity(monsterLevel: number): Rarity {
+  const weights = getRarityWeights(monsterLevel);
+  const roll = Math.random();
+  let cumulative = 0;
+
+  for (const [rarity, weight] of Object.entries(weights)) {
+    cumulative += weight;
+    if (roll < cumulative) return rarity as Rarity;
   }
   return Rarity.Common;
 }
 
-function generateAffixes(rarity: Rarity): ItemAffix[] {
-  const count = RARITY_AFFIX_COUNT[rarity];
-  const pool = [...VALID_AFFIXES];
-  const chosen: ItemAffix[] = [];
-  for (let i = 0; i < count && pool.length > 0; i++) {
-    const idx = Math.floor(Math.random() * pool.length);
-    const template = pool.splice(idx, 1)[0];
-    const value = Math.floor(
-      Math.random() * (template.maxVal - template.minVal + 1) + template.minVal
-    );
-    chosen.push({ stat: template.stat, value, label: template.label });
+// ── Rarity multipliers for affix values ──
+
+function rarityMultiplier(rarity: Rarity): number {
+  switch (rarity) {
+    case Rarity.Common: return 1.0;
+    case Rarity.Uncommon: return 1.5;
+    case Rarity.Rare: return 2.5;
+    case Rarity.Legendary: return 4.0;
   }
-  return chosen;
 }
 
-function pickItemType(): 'Weapon' | 'Armor' | 'Trinket' {
-  const roll = Math.random();
-  if (roll < 0.35) return 'Weapon';
-  if (roll < 0.70) return 'Armor';
-  return 'Trinket';
+// ── Affix count by rarity ──
+
+function affixCount(rarity: Rarity): number {
+  switch (rarity) {
+    case Rarity.Common: return rand(1, 2);
+    case Rarity.Uncommon: return rand(2, 3);
+    case Rarity.Rare: return rand(3, 4);
+    case Rarity.Legendary: return rand(4, 5);
+  }
 }
 
-function pickName(itemType: 'Weapon' | 'Armor' | 'Trinket'): string {
-  const names = ITEM_NAMES[itemType];
-  return names[Math.floor(Math.random() * names.length)];
+// ── Stat ranges (REDUCED BY 75% from original values) ──
+// Average values are ~25% of what they were before.
+
+const AFFIX_RANGES: Record<AffixStat, { min: number; max: number; label: string }> = {
+  str:            { min: 1, max: 2,  label: '+Strength' },
+  dex:            { min: 1, max: 2,  label: '+Dexterity' },
+  int:            { min: 1, max: 2,  label: '+Intelligence' },
+  vit:            { min: 1, max: 2,  label: '+Vitality' },
+  hp:             { min: 2, max: 5,  label: '+HP' },
+  physicalDamage: { min: 1, max: 3,  label: '+Physical Damage' },
+  magicDamage:    { min: 1, max: 3,  label: '+Magic Damage' },
+  defense:        { min: 1, max: 3,  label: '+Defense' },
+  critChance:     { min: 1, max: 2,  label: '+Crit Chance' },
+};
+
+const WEAPON_AFFIXES: AffixStat[] = ['str', 'dex', 'physicalDamage', 'magicDamage', 'critChance'];
+const ARMOR_AFFIXES: AffixStat[] = ['vit', 'str', 'defense', 'hp'];
+const TRINKET_AFFIXES: AffixStat[] = ['str', 'dex', 'int', 'vit', 'hp', 'critChance', 'magicDamage'];
+
+function getAffixPool(itemType: ItemType): AffixStat[] {
+  switch (itemType) {
+    case 'Weapon': return WEAPON_AFFIXES;
+    case 'Armor': return ARMOR_AFFIXES;
+    case 'Trinket': return TRINKET_AFFIXES;
+  }
 }
 
-const ITEM_ICONS: Record<string, string> = {
+function generateAffixes(
+  itemType: ItemType,
+  rarity: Rarity,
+  monsterLevel: number
+): ItemAffix[] {
+  const pool = getAffixPool(itemType);
+  const count = affixCount(rarity);
+  const mult = rarityMultiplier(rarity);
+  const levelScale = 1 + (monsterLevel - 1) * 0.02;
+
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const selected = shuffled.slice(0, Math.min(count, pool.length));
+
+  return selected.map(stat => {
+    const range = AFFIX_RANGES[stat];
+    const rawValue = randFloat(range.min, range.max) * mult * levelScale;
+    const value = Math.max(1, Math.round(rawValue));
+    return { stat, value, label: range.label };
+  });
+}
+
+// ── Item names ──
+
+const WEAPON_PREFIXES = ['Iron', 'Steel', 'Shadow', 'Flame', 'Frost', 'Thunder', 'Void', 'Ancient'];
+const WEAPON_SUFFIXES = ['Sword', 'Axe', 'Dagger', 'Staff', 'Mace', 'Bow', 'Spear', 'Wand'];
+const ARMOR_PREFIXES = ['Leather', 'Chain', 'Plate', 'Shadow', 'Runed', 'Blessed', 'Cursed', 'Ancient'];
+const ARMOR_SUFFIXES = ['Helm', 'Chestplate', 'Gauntlets', 'Greaves', 'Boots', 'Pauldrons', 'Bracers', 'Cloak'];
+const TRINKET_NAMES = ['Amulet', 'Ring', 'Talisman', 'Charm', 'Pendant', 'Sigil', 'Rune', 'Orb'];
+
+function generateItemName(itemType: ItemType, rarity: Rarity): string {
+  const rarityPrefix = rarity === Rarity.Legendary ? 'Legendary ' : '';
+  switch (itemType) {
+    case 'Weapon': {
+      const prefix = WEAPON_PREFIXES[rand(0, WEAPON_PREFIXES.length - 1)];
+      const suffix = WEAPON_SUFFIXES[rand(0, WEAPON_SUFFIXES.length - 1)];
+      return `${rarityPrefix}${prefix} ${suffix}`;
+    }
+    case 'Armor': {
+      const prefix = ARMOR_PREFIXES[rand(0, ARMOR_PREFIXES.length - 1)];
+      const suffix = ARMOR_SUFFIXES[rand(0, ARMOR_SUFFIXES.length - 1)];
+      return `${rarityPrefix}${prefix} ${suffix}`;
+    }
+    case 'Trinket': {
+      const name = TRINKET_NAMES[rand(0, TRINKET_NAMES.length - 1)];
+      return `${rarityPrefix}${name}`;
+    }
+  }
+}
+
+const ITEM_ICONS: Record<ItemType, string> = {
   Weapon: '⚔️',
   Armor: '🛡️',
   Trinket: '💎',
 };
 
-// ── Drop rate: base probability reduced by 50% ──
-const BASE_DROP_CHANCE = 0.30;
+// ── Base stats (REDUCED BY 75% from original values) ──
+
+function generateBaseWeaponDamage(rarity: Rarity, monsterLevel: number): number {
+  const base = randFloat(2, 5);
+  const mult = rarityMultiplier(rarity);
+  const levelScale = 1 + (monsterLevel - 1) * 0.03;
+  return Math.max(1, Math.round(base * mult * levelScale));
+}
+
+function generateBaseArmorDefense(rarity: Rarity, monsterLevel: number): number {
+  const base = randFloat(1, 4);
+  const mult = rarityMultiplier(rarity);
+  const levelScale = 1 + (monsterLevel - 1) * 0.03;
+  return Math.max(1, Math.round(base * mult * levelScale));
+}
+
+// ── Main generation function ──
 
 export function generateLoot(
-  dungeonLevel: number,
-  monsterLootWeight: number,
-  dungeonMode: 'Catacombs' | 'Depths' | 'AscensionTrial'
+  monsterLevel: number,
+  penaltyApplied: boolean = false
 ): GeneratedItem | null {
-  const modeMultiplier =
-    dungeonMode === 'Catacombs'      ? 0.5  :
-    dungeonMode === 'Depths'         ? 0.75 :
-    /* AscensionTrial */               1.0;
+  const itemTypes: ItemType[] = ['Weapon', 'Armor', 'Trinket'];
+  const itemType = itemTypes[rand(0, itemTypes.length - 1)];
 
-  const weightFactor = monsterLootWeight / 10;
-  const dropChance = BASE_DROP_CHANCE * modeMultiplier * weightFactor;
-
-  if (Math.random() > dropChance) return null;
-
-  const itemType = pickItemType();
-  const rarity = pickRarity();
-  const affixes = generateAffixes(rarity);
-  const name = pickName(itemType);
-
-  // Level scaling factor (1.0 at level 1, up to ~2.0 at level 20)
-  const levelScale = 1 + Math.min(dungeonLevel, 20) * 0.05;
-
-  // Generate base damage for weapons
-  let baseDamage: number | undefined;
-  if (itemType === 'Weapon') {
-    const [min, max] = WEAPON_BASE_DAMAGE[rarity];
-    baseDamage = Math.floor(randInRange(min, max) * levelScale);
+  // With penalty, cap rarity at Uncommon
+  let rarity = rollRarity(monsterLevel);
+  if (penaltyApplied && (rarity === Rarity.Rare || rarity === Rarity.Legendary)) {
+    rarity = Rarity.Uncommon;
   }
 
-  // Generate base defense for armor
-  let baseDefense: number | undefined;
-  if (itemType === 'Armor') {
-    const [min, max] = ARMOR_BASE_DEFENSE[rarity];
-    baseDefense = Math.floor(randInRange(min, max) * levelScale);
-  }
+  const affixes = generateAffixes(itemType, rarity, monsterLevel);
+  const name = generateItemName(itemType, rarity);
+  const id = `item_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-  return {
-    id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+  const item: GeneratedItem = {
+    id,
     name,
     itemType,
     rarity,
     affixes,
     icon: ITEM_ICONS[itemType],
-    baseDamage,
-    baseDefense,
+    itemLevel: monsterLevel,
   };
+
+  if (itemType === 'Weapon') {
+    item.baseDamage = generateBaseWeaponDamage(rarity, monsterLevel);
+  }
+  if (itemType === 'Armor') {
+    item.baseDefense = generateBaseArmorDefense(rarity, monsterLevel);
+  }
+
+  return item;
 }
+
+// ── Ascension Trial loot (slightly better) ──
+
+export function generateAscensionLoot(playerLevel: number): GeneratedItem | null {
+  return generateLoot(playerLevel + 5, false);
+}
+
+// ── Legacy multi-loot helper ──
 
 export function generateMultiLoot(
   dungeonLevel: number,
-  monsterLootWeight: number,
-  dungeonMode: 'Catacombs' | 'Depths' | 'AscensionTrial',
   killCount: number
 ): GeneratedItem[] {
   const drops: GeneratedItem[] = [];
   for (let i = 0; i < killCount; i++) {
-    const item = generateLoot(dungeonLevel, monsterLootWeight, dungeonMode);
+    const item = generateLoot(dungeonLevel, false);
     if (item) drops.push(item);
   }
   return drops;
+}
+
+// ── Starter equipment for new characters ──
+
+/**
+ * Generates a starter equipment set for newly created characters.
+ * Returns a weapon and armor at item level 1 with Common rarity,
+ * with guaranteed minimum base stats to make level 1 combat viable.
+ */
+export function generateStarterEquipment(): { weapon: GeneratedItem; armor: GeneratedItem } {
+  const starterAffixes: ItemAffix[] = [];
+
+  const weapon: GeneratedItem = {
+    id: `starter_weapon_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    name: 'Worn Sword',
+    itemType: 'Weapon',
+    rarity: Rarity.Common,
+    affixes: starterAffixes,
+    icon: ITEM_ICONS['Weapon'],
+    itemLevel: 1,
+    // Guaranteed 5 base damage — enough to deal meaningful damage vs level 1 monsters
+    baseDamage: 5,
+  };
+
+  const armor: GeneratedItem = {
+    id: `starter_armor_${Date.now() + 1}_${Math.random().toString(36).slice(2, 9)}`,
+    name: 'Worn Chestplate',
+    itemType: 'Armor',
+    rarity: Rarity.Common,
+    affixes: starterAffixes,
+    icon: ITEM_ICONS['Armor'],
+    itemLevel: 1,
+    // Guaranteed 5 base defense — enough to reduce incoming damage from level 1 monsters
+    baseDefense: 5,
+  };
+
+  return { weapon, armor };
 }

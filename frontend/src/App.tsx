@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useInternetIdentity } from './hooks/useInternetIdentity';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useGetCallerUserProfile,
   useSaveCallerUserProfile,
-  useGetCharacter,
+  useGetCharacters,
+  useSetCharacterHp,
 } from './hooks/useQueries';
-import { useLocalCharacter, LocalStats } from './hooks/useLocalCharacter';
-import { Realm } from './backend';
+import { useLocalCharacter } from './hooks/useLocalCharacter';
+import { useHealthRegen } from './hooks/useHealthRegen';
+import { Character, CharacterId } from './backend';
 import { GeneratedItem } from './engine/lootGenerator';
 
-// Screens
+import Navigation, { NavScreen } from './components/Navigation';
+import CharacterSelectScreen from './components/CharacterSelectScreen';
 import CharacterCreation from './components/CharacterCreation';
 import CharacterSheet from './components/CharacterSheet';
 import DungeonSelectScreen from './components/DungeonSelectScreen';
@@ -19,9 +23,13 @@ import MarketplaceScreen from './components/MarketplaceScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
 import ProfessionsPlaceholder from './components/ProfessionsPlaceholder';
 import ShrinesPlaceholder from './components/ShrinesPlaceholder';
-import Navigation from './components/Navigation';
 
-type Screen =
+type AppScreen =
+  | 'loading'
+  | 'login'
+  | 'profile-setup'
+  | 'character-select'
+  | 'character-creation'
   | 'character'
   | 'dungeon-select'
   | 'dungeon-run'
@@ -35,22 +43,22 @@ type DungeonMode = 'Catacombs' | 'Depths' | 'AscensionTrial';
 
 export default function App() {
   const { identity, isInitializing } = useInternetIdentity();
+  const queryClient = useQueryClient();
   const isAuthenticated = !!identity;
 
-  const {
-    data: userProfile,
-    isLoading: profileLoading,
-    isFetched: profileFetched,
-  } = useGetCallerUserProfile();
-  const saveProfileMutation = useSaveCallerUserProfile();
-
-  const [usernameInput, setUsernameInput] = useState('');
-  const [profileError, setProfileError] = useState('');
+  const [screen, setScreen] = useState<AppScreen>('loading');
+  const [activeCharacterId, setActiveCharacterId] = useState<CharacterId | null>(null);
+  const [dungeonMode, setDungeonMode] = useState<DungeonMode>('Catacombs');
+  const [dungeonLevel, setDungeonLevel] = useState(1);
+  const [pendingLoot, setPendingLoot] = useState<GeneratedItem[]>([]);
+  const [isInCombat, setIsInCombat] = useState(false);
+  const [profileUsername, setProfileUsername] = useState('');
 
   const {
     character,
-    initCharacter,
-    addXp,
+    initializeCharacter,
+    setCurrentHP,
+    clearCharacter,
     applyStatPoints,
     purchaseAbility,
     equipAbility,
@@ -61,237 +69,308 @@ export default function App() {
     moveToStash,
     moveFromStash,
     applyDeathPenalty,
-    clearCharacter,
   } = useLocalCharacter();
 
-  // Query backend for existing character
+  const setCharacterHpMutation = useSetCharacterHp();
+
   const {
-    data: backendCharacter,
-    isLoading: backendCharacterLoading,
-    isFetched: backendCharacterFetched,
-  } = useGetCharacter();
+    data: userProfile,
+    isLoading: profileLoading,
+    isFetched: profileFetched,
+  } = useGetCallerUserProfile();
+  const saveProfile = useSaveCallerUserProfile();
 
-  const [currentScreen, setCurrentScreen] = useState<Screen>('character');
-  const [dungeonMode, setDungeonMode] = useState<DungeonMode>('Catacombs');
-  const [dungeonLevel, setDungeonLevel] = useState(1);
-  const [pendingLoot, setPendingLoot] = useState<GeneratedItem[]>([]);
+  const syncHpToBackend = useCallback(
+    (hp: number) => {
+      if (activeCharacterId === null) return;
+      setCharacterHpMutation.mutate({ characterId: activeCharacterId, hp });
+    },
+    [activeCharacterId] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
-  // If backend has a character but local storage doesn't, auto-initialize from backend data.
-  // This handles the case where the user has an existing character (e.g., after clearing local storage
-  // or logging in on a new device).
+  // Health regen: +2 HP/sec outside combat
+  useHealthRegen({
+    currentHP: character?.currentHP ?? 0,
+    maxHP: character?.maxHP ?? 0,
+    isInCombat,
+    onHpChange: setCurrentHP,
+    onSyncToBackend: syncHpToBackend,
+  });
+
+  // Routing logic
   useEffect(() => {
-    if (
-      isAuthenticated &&
-      backendCharacterFetched &&
-      backendCharacter !== null &&
-      backendCharacter !== undefined &&
-      !character
-    ) {
-      const realm = backendCharacter.realm === Realm.Hardcore ? 'Hardcore' : 'Softcore';
-      const allocatedStats: LocalStats = {
-        str: Number(backendCharacter.str),
-        dex: Number(backendCharacter.dex),
-        int: Number(backendCharacter.int),
-        vit: Number(backendCharacter.vit),
-      };
-      initCharacter(backendCharacter.name, realm, allocatedStats);
-    }
-  }, [isAuthenticated, backendCharacterFetched, backendCharacter, character, initCharacter]);
-
-  // Show profile setup if authenticated but no profile yet
-  const showProfileSetup =
-    isAuthenticated && !profileLoading && profileFetched && userProfile === null;
-
-  // Show character creation only if:
-  // - authenticated
-  // - has profile
-  // - no local character
-  // - backend character query has completed and returned null (no existing character)
-  const showCharacterCreation =
-    isAuthenticated &&
-    !showProfileSetup &&
-    !character &&
-    backendCharacterFetched &&
-    backendCharacter === null;
-
-  // Show loading while we're waiting for the backend character check
-  const isCheckingBackendCharacter =
-    isAuthenticated &&
-    !showProfileSetup &&
-    !character &&
-    (backendCharacterLoading || !backendCharacterFetched);
-
-  async function handleSaveProfile(e: React.FormEvent) {
-    e.preventDefault();
-    setProfileError('');
-    if (!usernameInput.trim() || usernameInput.trim().length < 2) {
-      setProfileError('Username must be at least 2 characters.');
+    if (isInitializing) {
+      setScreen('loading');
       return;
     }
-    try {
-      await saveProfileMutation.mutateAsync({ username: usernameInput.trim() });
-    } catch {
-      setProfileError('Failed to save profile. Please try again.');
+    if (!isAuthenticated) {
+      setScreen('login');
+      return;
     }
-  }
+    if (profileLoading) {
+      setScreen('loading');
+      return;
+    }
+    if (profileFetched && userProfile === null) {
+      setScreen('profile-setup');
+      return;
+    }
+    if (profileFetched && userProfile !== null) {
+      if (
+        screen === 'loading' ||
+        screen === 'login' ||
+        screen === 'profile-setup'
+      ) {
+        setScreen('character-select');
+      }
+    }
+  }, [isInitializing, isAuthenticated, profileLoading, profileFetched, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleCharacterCreationComplete(
-    name: string,
-    realm: Realm,
-    allocatedStats: LocalStats
-  ) {
-    initCharacter(name, realm === Realm.Hardcore ? 'Hardcore' : 'Softcore', allocatedStats);
-    setCurrentScreen('character');
-  }
+  // Clear on logout
+  useEffect(() => {
+    if (!isAuthenticated) {
+      clearCharacter();
+      setActiveCharacterId(null);
+    }
+  }, [isAuthenticated, clearCharacter]);
 
-  // Called when createCharacter returns #alreadyExists — skip to character sheet
-  function handleCharacterAlreadyExists() {
-    // The backend character query will have been invalidated by the mutation.
-    // The useEffect above will auto-initialize the local character once the query resolves.
-    // Just navigate to the character screen.
-    setCurrentScreen('character');
-  }
+  const handleSelectCharacter = useCallback(
+    (characterId: CharacterId, backendCharacter: Character) => {
+      initializeCharacter(backendCharacter, characterId);
+      setActiveCharacterId(characterId);
+      setScreen('character');
+    },
+    [initializeCharacter]
+  );
 
-  function handleStartDungeon(mode: DungeonMode, level: number) {
+  const handleCreateCharacter = useCallback(() => {
+    setScreen('character-creation');
+  }, []);
+
+  const handleCharacterCreated = useCallback(() => {
+    setScreen('character-select');
+    queryClient.invalidateQueries({ queryKey: ['characters'] });
+  }, [queryClient]);
+
+  const handleAlreadyExists = useCallback(() => {
+    setScreen('character-select');
+  }, []);
+
+  const handleBackToCharacterSelect = useCallback(() => {
+    clearCharacter();
+    setActiveCharacterId(null);
+    setScreen('character-select');
+  }, [clearCharacter]);
+
+  const handleNavigate = useCallback((navScreen: NavScreen) => {
+    setScreen(navScreen as AppScreen);
+  }, []);
+
+  const handleStartDungeon = useCallback((mode: DungeonMode, level: number) => {
     setDungeonMode(mode);
     setDungeonLevel(level);
-    setCurrentScreen('dungeon-run');
-  }
+    setIsInCombat(true);
+    setScreen('dungeon-run');
+  }, []);
 
-  function handleDungeonComplete(result: {
-    survived: boolean;
-    xpGained: number;
-    loot: GeneratedItem[];
-  }) {
-    if (result.xpGained > 0) {
-      addXp(result.xpGained);
-    }
-    if (result.loot.length > 0) {
-      result.loot.forEach((item) => addItemToInventory(item));
-      setPendingLoot(result.loot);
-    }
-    setCurrentScreen('dungeon-select');
-  }
+  const handleDungeonComplete = useCallback(
+    (result: {
+      survived: boolean;
+      xpGained: number;
+      loot: GeneratedItem[];
+      remainingHp: number;
+    }) => {
+      setIsInCombat(false);
 
-  function handleDeath() {
+      // Persist remaining HP
+      const newHp = result.remainingHp;
+      setCurrentHP(newHp);
+      syncHpToBackend(newHp);
+
+      if (result.loot.length > 0) {
+        result.loot.forEach((item) => addItemToInventory(item));
+        setPendingLoot(result.loot);
+      }
+
+      setScreen('dungeon-select');
+    },
+    [setCurrentHP, syncHpToBackend, addItemToInventory]
+  );
+
+  const handleDeath = useCallback(() => {
+    setIsInCombat(false);
     if (!character) return;
     if (character.realm === 'Hardcore') {
       clearCharacter();
-      setCurrentScreen('character');
+      setActiveCharacterId(null);
+      setScreen('character-select');
     } else {
       applyDeathPenalty(false);
-      setCurrentScreen('dungeon-select');
+      // Reset HP to full after softcore death
+      const maxHp = character.maxHP;
+      setCurrentHP(maxHp);
+      syncHpToBackend(maxHp);
+      setScreen('dungeon-select');
     }
-  }
+  }, [character, clearCharacter, applyDeathPenalty, setCurrentHP, syncHpToBackend]);
 
-  // ── Loading ──
-  if (isInitializing) {
+  const handleSaveProfile = async () => {
+    if (!profileUsername.trim()) return;
+    await saveProfile.mutateAsync({ username: profileUsername.trim() });
+  };
+
+  // ── RENDER ──
+
+  if (screen === 'loading') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
+        <div className="text-center">
           <img
             src="/assets/generated/logo-sigil.dim_256x256.png"
             alt="Loading"
-            className="w-16 h-16 mx-auto animate-pulse opacity-70"
+            className="w-16 h-16 mx-auto mb-4 opacity-60 animate-pulse"
           />
-          <p className="text-muted-foreground text-sm animate-pulse">Initializing…</p>
+          <p className="text-muted text-sm">Loading Abyss Ascendant…</p>
         </div>
       </div>
     );
   }
 
-  // ── Not authenticated ──
-  if (!isAuthenticated) {
+  if (screen === 'login') {
     return <LoginScreen />;
   }
 
-  // ── Profile setup ──
-  if (showProfileSetup) {
+  if (screen === 'profile-setup') {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-card border border-border rounded-xl p-6 space-y-4">
-          <div className="text-center">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-sm bg-surface-1 border border-border rounded-2xl p-8">
+          <div className="text-center mb-6">
             <img
               src="/assets/generated/logo-sigil.dim_256x256.png"
-              alt="Sigil"
-              className="w-16 h-16 mx-auto mb-3 opacity-90"
+              alt="Abyss Ascendant"
+              className="w-12 h-12 mx-auto mb-3 opacity-80"
             />
-            <h2 className="text-xl font-bold text-foreground">Choose Your Name</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              This name will identify you across the realm.
+            <h2 className="text-xl font-bold text-foreground font-display">
+              Welcome, Adventurer
+            </h2>
+            <p className="text-sm text-muted mt-1">
+              Choose your name before entering the Abyss
             </p>
           </div>
-          <form onSubmit={handleSaveProfile} className="space-y-3">
-            <input
-              type="text"
-              value={usernameInput}
-              onChange={(e) => setUsernameInput(e.target.value)}
-              placeholder="Enter username..."
-              maxLength={30}
-              className="w-full bg-background border border-border rounded px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
-            {profileError && <p className="text-destructive text-xs">{profileError}</p>}
-            <button
-              type="submit"
-              disabled={saveProfileMutation.isPending}
-              className="w-full py-2 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-all"
-            >
-              {saveProfileMutation.isPending ? 'Saving…' : 'Enter the Realm'}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Checking for existing backend character ──
-  if (isCheckingBackendCharacter) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <img
-            src="/assets/generated/logo-sigil.dim_256x256.png"
-            alt="Loading"
-            className="w-16 h-16 mx-auto animate-pulse opacity-70"
+          <input
+            type="text"
+            value={profileUsername}
+            onChange={(e) => setProfileUsername(e.target.value)}
+            placeholder="Enter your name..."
+            className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-foreground placeholder:text-muted focus:outline-none focus:border-primary transition-colors mb-4"
+            onKeyDown={(e) => e.key === 'Enter' && handleSaveProfile()}
           />
-          <p className="text-muted-foreground text-sm animate-pulse">Loading your hero…</p>
+          <button
+            onClick={handleSaveProfile}
+            disabled={!profileUsername.trim() || saveProfile.isPending}
+            className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-all disabled:opacity-50"
+          >
+            {saveProfile.isPending ? 'Saving…' : 'Enter the Abyss'}
+          </button>
         </div>
+        <AppFooter />
       </div>
     );
   }
 
-  // ── Character creation ──
-  if (showCharacterCreation) {
+  if (screen === 'character-select') {
     return (
-      <CharacterCreation
-        onComplete={handleCharacterCreationComplete}
-        onAlreadyExists={handleCharacterAlreadyExists}
+      <>
+        <CharacterSelectScreen
+          onSelectCharacter={handleSelectCharacter}
+          onCreateCharacter={handleCreateCharacter}
+        />
+        <AppFooter />
+      </>
+    );
+  }
+
+  if (screen === 'character-creation') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="bg-surface-1 border-b border-border px-6 py-4">
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            <button
+              onClick={() => setScreen('character-select')}
+              className="text-muted hover:text-foreground transition-colors text-sm"
+            >
+              ← Back
+            </button>
+            <h1 className="text-lg font-bold text-foreground font-display">Create Character</h1>
+          </div>
+        </div>
+        <CharacterCreation
+          onCharacterCreated={handleCharacterCreated}
+          onAlreadyExists={handleAlreadyExists}
+        />
+        <AppFooter />
+      </div>
+    );
+  }
+
+  if (screen === 'dungeon-run' && character) {
+    return (
+      <DungeonRunScreen
+        character={character}
+        dungeonMode={dungeonMode}
+        dungeonLevel={dungeonLevel}
+        onComplete={handleDungeonComplete}
+        onDeath={handleDeath}
       />
     );
   }
 
-  // ── Character must exist at this point ──
+  // Main game screens require active character
   if (!character) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center text-muted-foreground animate-pulse">
-          Loading character…
+        <div className="text-center">
+          <p className="text-muted">No character selected.</p>
+          <button
+            onClick={() => setScreen('character-select')}
+            className="mt-4 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm"
+          >
+            Select Character
+          </button>
         </div>
       </div>
     );
   }
+
+  // Only pass valid NavScreen values to Navigation
+  const validNavScreens: NavScreen[] = [
+    'character',
+    'dungeon-select',
+    'inventory',
+    'marketplace',
+    'leaderboard',
+    'professions',
+    'shrines',
+  ];
+  const navScreen: NavScreen = validNavScreens.includes(screen as NavScreen)
+    ? (screen as NavScreen)
+    : 'character';
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navigation
-        character={character}
-        currentScreen={currentScreen}
-        onNavigate={(screen) => setCurrentScreen(screen as Screen)}
-        userProfile={userProfile ?? undefined}
+        currentScreen={navScreen}
+        onNavigate={handleNavigate}
+        characterName={character.name}
+        characterLevel={character.level}
+        characterRealm={character.realm}
+        currentHP={character.currentHP}
+        maxHP={character.maxHP}
+        onBackToCharacterSelect={handleBackToCharacterSelect}
       />
 
-      <main className="flex-1 py-6">
-        {currentScreen === 'character' && (
+      <main className="flex-1">
+        {screen === 'character' && (
           <CharacterSheet
             character={character}
             onApplyStatPoints={applyStatPoints}
@@ -300,8 +379,7 @@ export default function App() {
             onUnequipAbility={unequipAbility}
           />
         )}
-
-        {currentScreen === 'dungeon-select' && (
+        {screen === 'dungeon-select' && (
           <DungeonSelectScreen
             character={character}
             onStartDungeon={handleStartDungeon}
@@ -309,18 +387,7 @@ export default function App() {
             onClearPendingLoot={() => setPendingLoot([])}
           />
         )}
-
-        {currentScreen === 'dungeon-run' && (
-          <DungeonRunScreen
-            character={character}
-            dungeonMode={dungeonMode}
-            dungeonLevel={dungeonLevel}
-            onComplete={handleDungeonComplete}
-            onDeath={handleDeath}
-          />
-        )}
-
-        {currentScreen === 'inventory' && (
+        {screen === 'inventory' && (
           <InventoryScreen
             character={character}
             onEquipItem={equipItem}
@@ -329,87 +396,72 @@ export default function App() {
             onMoveFromStash={moveFromStash}
           />
         )}
-
-        {currentScreen === 'marketplace' && <MarketplaceScreen character={character} />}
-
-        {currentScreen === 'leaderboard' && (
+        {screen === 'marketplace' && <MarketplaceScreen character={character} />}
+        {screen === 'leaderboard' && (
           <LeaderboardScreen currentUsername={userProfile?.username} />
         )}
-
-        {currentScreen === 'professions' && <ProfessionsPlaceholder />}
-        {currentScreen === 'shrines' && <ShrinesPlaceholder />}
+        {screen === 'professions' && <ProfessionsPlaceholder />}
+        {screen === 'shrines' && <ShrinesPlaceholder />}
       </main>
 
-      <footer className="border-t border-border py-4 px-6 text-center text-xs text-muted-foreground">
-        <p>
-          © {new Date().getFullYear()} Abyss Crawler •{' '}
-          <a
-            href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(
-              window.location.hostname
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-primary transition-colors"
-          >
-            Built with ❤️ using caffeine.ai
-          </a>
-        </p>
-      </footer>
+      <AppFooter />
     </div>
   );
 }
 
-// ── Login Screen ──
 function LoginScreen() {
   const { login, loginStatus } = useInternetIdentity();
   const isLoggingIn = loginStatus === 'logging-in';
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm text-center space-y-6">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+      <div className="text-center mb-10">
         <img
           src="/assets/generated/logo-sigil.dim_256x256.png"
-          alt="Abyss Crawler"
-          className="w-24 h-24 mx-auto opacity-90"
+          alt="Abyss Ascendant"
+          className="w-24 h-24 mx-auto mb-6 opacity-90"
         />
-        <div>
-          <h1 className="text-4xl font-bold text-primary tracking-widest uppercase">
-            Abyss Crawler
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Descend into the darkness. Forge your legend.
-          </p>
-        </div>
-        <button
-          onClick={login}
-          disabled={isLoggingIn}
-          className="w-full py-3 rounded-lg bg-primary text-primary-foreground font-bold uppercase tracking-widest hover:bg-primary/90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-        >
-          {isLoggingIn ? (
-            <>
-              <span className="animate-spin inline-block w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full" />
-              Connecting…
-            </>
-          ) : (
-            'Enter the Abyss'
-          )}
-        </button>
-        <p className="text-xs text-muted-foreground">Secured by Internet Identity</p>
+        <h1 className="text-4xl font-bold text-foreground font-display mb-2">
+          Abyss Ascendant
+        </h1>
+        <p className="text-muted text-lg">Descend into darkness. Rise through power.</p>
       </div>
 
-      <footer className="absolute bottom-4 text-xs text-muted-foreground">
-        © {new Date().getFullYear()} •{' '}
-        <a
-          href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(
-            window.location.hostname
-          )}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-primary transition-colors"
-        >
-          Built with ❤️ using caffeine.ai
-        </a>
-      </footer>
+      <button
+        onClick={login}
+        disabled={isLoggingIn}
+        className="px-8 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-lg hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50"
+      >
+        {isLoggingIn ? 'Connecting…' : 'Enter the Abyss'}
+      </button>
+
+      <p className="mt-4 text-xs text-muted">Secured by Internet Identity</p>
+
+      <div className="absolute bottom-4">
+        <AppFooter />
+      </div>
     </div>
+  );
+}
+
+function AppFooter() {
+  const appId =
+    typeof window !== 'undefined'
+      ? encodeURIComponent(window.location.hostname)
+      : 'abyss-ascendant';
+  return (
+    <footer className="py-4 text-center text-xs text-muted border-t border-border mt-auto">
+      <span>© {new Date().getFullYear()} Abyss Ascendant · Built with </span>
+      <span className="text-red-400">♥</span>
+      <span> using </span>
+      <a
+        href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${appId}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary hover:underline"
+      >
+        caffeine.ai
+      </a>
+    </footer>
   );
 }

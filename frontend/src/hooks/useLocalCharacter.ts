@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { Character } from '../backend';
 import { GeneratedItem } from '../engine/lootGenerator';
-import { ABILITIES, Ability } from '../data/abilities';
+
+export type { GeneratedItem };
 
 export interface LocalStats {
   str: number;
@@ -10,141 +12,157 @@ export interface LocalStats {
 }
 
 export interface LocalCharacter {
+  // Identity
+  characterId: number;
   name: string;
   realm: 'Softcore' | 'Hardcore';
+  classTier: number;
+  season: number;
+  status: 'Alive' | 'Dead';
+
+  // Level / XP
   level: number;
   xp: number;
+  pendingStatPoints: number;
+
+  // Stats (flat, matches old shape)
   stats: LocalStats;
+
+  // HP
+  maxHP: number;
+  currentHP: number;
+
+  // Inventory
   inventory: GeneratedItem[];
   stash: GeneratedItem[];
   equippedItems: GeneratedItem[];
-  // Abilities: owned ability IDs and equipped (slotted) ability IDs
+
+  // Abilities
   ownedAbilityIds: string[];
   equippedAbilityIds: string[]; // max 3
   availableAbilityPoints: number;
-  // Pending stat points from leveling
+}
+
+function getStorageKey(characterId: number): string {
+  return `localCharacter_v3_${characterId}`;
+}
+
+interface LocalOnlyData {
   pendingStatPoints: number;
+  inventory: GeneratedItem[];
+  stash: GeneratedItem[];
+  equippedItems: GeneratedItem[];
+  ownedAbilityIds: string[];
+  equippedAbilityIds: string[];
+  availableAbilityPoints: number;
 }
 
-const STORAGE_KEY = 'local_character_v2';
-
-const XP_PER_LEVEL = 100;
-
-// Ability points: 1 at creation + 1 per 10 levels
-// At level 1: 1 point. At level 10: 2 points. At level 100: 11 points.
-function calcTotalAbilityPoints(level: number): number {
-  return 1 + Math.floor(level / 10);
+function loadLocalData(characterId: number): LocalOnlyData | null {
+  try {
+    const key = getStorageKey(characterId);
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+    return JSON.parse(stored) as LocalOnlyData;
+  } catch {
+    return null;
+  }
 }
 
-function calcLevel(xp: number): number {
-  return Math.max(1, Math.floor(xp / XP_PER_LEVEL) + 1);
-}
-
-function calcXpForNextLevel(level: number): number {
-  return level * XP_PER_LEVEL;
+function saveLocalData(character: LocalCharacter): void {
+  try {
+    const key = getStorageKey(character.characterId);
+    const toSave: LocalOnlyData = {
+      pendingStatPoints: character.pendingStatPoints,
+      inventory: character.inventory,
+      stash: character.stash,
+      equippedItems: character.equippedItems,
+      ownedAbilityIds: character.ownedAbilityIds,
+      equippedAbilityIds: character.equippedAbilityIds,
+      availableAbilityPoints: character.availableAbilityPoints,
+    };
+    localStorage.setItem(key, JSON.stringify(toSave));
+  } catch {
+    // ignore
+  }
 }
 
 export function useLocalCharacter() {
-  const [character, setCharacter] = useState<LocalCharacter | null>(null);
+  const [character, setCharacterState] = useState<LocalCharacter | null>(null);
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as LocalCharacter;
-        // Migrate: ensure no gold field, ensure ability points use new formula
-        const level = parsed.level ?? 1;
-        const totalPoints = calcTotalAbilityPoints(level);
-        const spentPoints = parsed.ownedAbilityIds?.length ?? 0;
-        const available = Math.max(0, totalPoints - spentPoints);
-        setCharacter({
-          ...parsed,
-          availableAbilityPoints: available,
-        });
-      }
-    } catch {
-      // ignore parse errors
-    }
-  }, []);
+  const initializeCharacter = useCallback(
+    (backendCharacter: Character, characterId: number): LocalCharacter => {
+      const localData = loadLocalData(characterId);
 
-  // Persist to localStorage whenever character changes
-  useEffect(() => {
-    if (character) {
-      // Strip any gold field before saving
-      const { ...toSave } = character as LocalCharacter & { gold?: number };
-      delete (toSave as { gold?: number }).gold;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-    }
-  }, [character]);
+      const realmKind = (backendCharacter.realm as unknown as { __kind__: string }).__kind__;
+      const statusKind = (backendCharacter.status as unknown as { __kind__: string }).__kind__;
 
-  const initCharacter = useCallback(
-    (
-      name: string,
-      realm: 'Softcore' | 'Hardcore',
-      allocatedStats: LocalStats
-    ) => {
-      // Validate stats: each must be at least 1
-      const stats: LocalStats = {
-        str: Math.max(1, allocatedStats.str),
-        dex: Math.max(1, allocatedStats.dex),
-        int: Math.max(1, allocatedStats.int),
-        vit: Math.max(1, allocatedStats.vit),
+      const merged: LocalCharacter = {
+        characterId,
+        name: backendCharacter.name,
+        realm: realmKind === 'Hardcore' ? 'Hardcore' : 'Softcore',
+        classTier: Number(backendCharacter.classTier),
+        season: Number(backendCharacter.season),
+        status: statusKind === 'Dead' ? 'Dead' : 'Alive',
+        level: Number(backendCharacter.level),
+        xp: Number(backendCharacter.xp),
+        stats: {
+          str: Number(backendCharacter.str),
+          dex: Number(backendCharacter.dex),
+          int: Number(backendCharacter.int),
+          vit: Number(backendCharacter.vit),
+        },
+        maxHP: Number(backendCharacter.maxHP),
+        // Always seed from backend currentHP
+        currentHP: Number(backendCharacter.currentHP),
+        // Local-only data
+        pendingStatPoints: localData?.pendingStatPoints ?? 0,
+        inventory: localData?.inventory ?? [],
+        stash: localData?.stash ?? [],
+        equippedItems: localData?.equippedItems ?? [],
+        ownedAbilityIds: localData?.ownedAbilityIds ?? [],
+        equippedAbilityIds: localData?.equippedAbilityIds ?? [],
+        availableAbilityPoints: localData?.availableAbilityPoints ?? 1,
       };
 
-      const newChar: LocalCharacter = {
-        name,
-        realm,
-        level: 1,
-        xp: 0,
-        stats,
-        inventory: [],
-        stash: [],
-        equippedItems: [],
-        ownedAbilityIds: [],
-        equippedAbilityIds: [],
-        availableAbilityPoints: 1, // start with exactly 1 ability point
-        pendingStatPoints: 0,
-      };
-      setCharacter(newChar);
-      return newChar;
+      setCharacterState(merged);
+      return merged;
     },
     []
   );
 
-  const addXp = useCallback(
-    (amount: number) => {
-      setCharacter((prev) => {
+  const updateCharacter = useCallback(
+    (updater: (prev: LocalCharacter) => LocalCharacter) => {
+      setCharacterState((prev) => {
         if (!prev) return prev;
-        const newXp = prev.xp + amount;
-        const newLevel = calcLevel(newXp);
-        const oldLevel = prev.level;
-        const levelsGained = newLevel - oldLevel;
-
-        // Recalculate ability points based on new level
-        const totalPoints = calcTotalAbilityPoints(newLevel);
-        const spentPoints = prev.ownedAbilityIds.length;
-        const newAvailablePoints = Math.max(0, totalPoints - spentPoints);
-
-        return {
-          ...prev,
-          xp: newXp,
-          level: newLevel,
-          pendingStatPoints: prev.pendingStatPoints + levelsGained,
-          availableAbilityPoints: newAvailablePoints,
-        };
+        const updated = updater(prev);
+        saveLocalData(updated);
+        return updated;
       });
     },
     []
   );
 
+  const setCurrentHP = useCallback((hp: number) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, currentHP: Math.max(0, Math.min(hp, prev.maxHP)) };
+      saveLocalData(updated);
+      return updated;
+    });
+  }, []);
+
+  const clearCharacter = useCallback(() => {
+    setCharacterState(null);
+  }, []);
+
+  // Legacy helpers used by CharacterSheet / AbilitySelectModal
   const applyStatPoints = useCallback(
     (delta: Partial<LocalStats>) => {
-      setCharacter((prev) => {
+      setCharacterState((prev) => {
         if (!prev) return prev;
         const cost = Object.values(delta).reduce((s, v) => s + (v ?? 0), 0);
         if (cost > prev.pendingStatPoints) return prev;
-        return {
+        const updated: LocalCharacter = {
           ...prev,
           stats: {
             str: prev.stats.str + (delta.str ?? 0),
@@ -154,178 +172,148 @@ export function useLocalCharacter() {
           },
           pendingStatPoints: prev.pendingStatPoints - cost,
         };
+        saveLocalData(updated);
+        return updated;
       });
     },
     []
   );
 
-  const purchaseAbility = useCallback(
-    (abilityId: string) => {
-      setCharacter((prev) => {
-        if (!prev) return prev;
-        // Guard: must have available points
-        if (prev.availableAbilityPoints <= 0) return prev;
-        // Guard: must not already own it
-        if (prev.ownedAbilityIds.includes(abilityId)) return prev;
-        // Guard: ability must exist
-        const ability = ABILITIES.find((a) => a.id === abilityId);
-        if (!ability) return prev;
+  const purchaseAbility = useCallback((abilityId: string) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      if (prev.availableAbilityPoints <= 0) return prev;
+      if (prev.ownedAbilityIds.includes(abilityId)) return prev;
+      const updated: LocalCharacter = {
+        ...prev,
+        ownedAbilityIds: [...prev.ownedAbilityIds, abilityId],
+        availableAbilityPoints: prev.availableAbilityPoints - 1,
+      };
+      saveLocalData(updated);
+      return updated;
+    });
+  }, []);
 
-        return {
-          ...prev,
-          ownedAbilityIds: [...prev.ownedAbilityIds, abilityId],
-          availableAbilityPoints: prev.availableAbilityPoints - 1,
-        };
-      });
-    },
-    []
-  );
+  const equipAbility = useCallback((abilityId: string, slotIndex: number) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      if (!prev.ownedAbilityIds.includes(abilityId)) return prev;
+      if (slotIndex < 0 || slotIndex > 2) return prev;
+      const newEquipped = [...prev.equippedAbilityIds];
+      const existingIdx = newEquipped.indexOf(abilityId);
+      if (existingIdx !== -1) newEquipped.splice(existingIdx, 1);
+      while (newEquipped.length <= slotIndex) newEquipped.push('');
+      newEquipped[slotIndex] = abilityId;
+      const cleaned = newEquipped.filter((id, i) => id !== '' || i < 3).slice(0, 3);
+      const updated: LocalCharacter = { ...prev, equippedAbilityIds: cleaned };
+      saveLocalData(updated);
+      return updated;
+    });
+  }, []);
 
-  const equipAbility = useCallback(
-    (abilityId: string, slotIndex: number) => {
-      setCharacter((prev) => {
-        if (!prev) return prev;
-        // Must own the ability
-        if (!prev.ownedAbilityIds.includes(abilityId)) return prev;
-        // Slot index must be 0, 1, or 2 (max 3 equipped)
-        if (slotIndex < 0 || slotIndex > 2) return prev;
+  const unequipAbility = useCallback((abilityId: string) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      const updated: LocalCharacter = {
+        ...prev,
+        equippedAbilityIds: prev.equippedAbilityIds.filter((id) => id !== abilityId),
+      };
+      saveLocalData(updated);
+      return updated;
+    });
+  }, []);
 
-        const newEquipped = [...prev.equippedAbilityIds];
-        // Remove from any existing slot
-        const existingIdx = newEquipped.indexOf(abilityId);
-        if (existingIdx !== -1) newEquipped.splice(existingIdx, 1);
-        // Place in target slot (pad if needed)
-        while (newEquipped.length <= slotIndex) newEquipped.push('');
-        newEquipped[slotIndex] = abilityId;
-        // Clean up empty trailing slots
-        const cleaned = newEquipped.filter((id, i) => id !== '' || i < 3);
+  const addItemToInventory = useCallback((item: GeneratedItem) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      const updated: LocalCharacter = { ...prev, inventory: [...prev.inventory, item] };
+      saveLocalData(updated);
+      return updated;
+    });
+  }, []);
 
-        return {
-          ...prev,
-          equippedAbilityIds: cleaned.slice(0, 3),
-        };
-      });
-    },
-    []
-  );
+  const equipItem = useCallback((item: GeneratedItem) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      const newInventory = prev.inventory.filter((i) => i.id !== item.id);
+      const displaced = prev.equippedItems.find((i) => i.itemType === item.itemType);
+      const newEquipped = prev.equippedItems.filter((i) => i.itemType !== item.itemType);
+      newEquipped.push(item);
+      if (displaced) newInventory.push(displaced);
+      const updated: LocalCharacter = { ...prev, inventory: newInventory, equippedItems: newEquipped };
+      saveLocalData(updated);
+      return updated;
+    });
+  }, []);
 
-  const unequipAbility = useCallback(
-    (abilityId: string) => {
-      setCharacter((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          equippedAbilityIds: prev.equippedAbilityIds.filter((id) => id !== abilityId),
-        };
-      });
-    },
-    []
-  );
+  const unequipItem = useCallback((item: GeneratedItem) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      const updated: LocalCharacter = {
+        ...prev,
+        equippedItems: prev.equippedItems.filter((i) => i.id !== item.id),
+        inventory: [...prev.inventory, item],
+      };
+      saveLocalData(updated);
+      return updated;
+    });
+  }, []);
 
-  const addItemToInventory = useCallback(
-    (item: GeneratedItem) => {
-      setCharacter((prev) => {
-        if (!prev) return prev;
-        return { ...prev, inventory: [...prev.inventory, item] };
-      });
-    },
-    []
-  );
+  const moveToStash = useCallback((item: GeneratedItem) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      const updated: LocalCharacter = {
+        ...prev,
+        inventory: prev.inventory.filter((i) => i.id !== item.id),
+        stash: [...prev.stash, item],
+      };
+      saveLocalData(updated);
+      return updated;
+    });
+  }, []);
 
-  const equipItem = useCallback(
-    (item: GeneratedItem) => {
-      setCharacter((prev) => {
-        if (!prev) return prev;
-        // Remove from inventory
-        const newInventory = prev.inventory.filter((i) => i.id !== item.id);
-        // Unequip existing item of same type
-        const displaced = prev.equippedItems.find((i) => i.itemType === item.itemType);
-        const newEquipped = prev.equippedItems.filter((i) => i.itemType !== item.itemType);
-        newEquipped.push(item);
-        // Put displaced item back in inventory
-        if (displaced) newInventory.push(displaced);
-        return { ...prev, inventory: newInventory, equippedItems: newEquipped };
-      });
-    },
-    []
-  );
+  const moveFromStash = useCallback((item: GeneratedItem) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      const updated: LocalCharacter = {
+        ...prev,
+        stash: prev.stash.filter((i) => i.id !== item.id),
+        inventory: [...prev.inventory, item],
+      };
+      saveLocalData(updated);
+      return updated;
+    });
+  }, []);
 
-  const unequipItem = useCallback(
-    (item: GeneratedItem) => {
-      setCharacter((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          equippedItems: prev.equippedItems.filter((i) => i.id !== item.id),
-          inventory: [...prev.inventory, item],
-        };
-      });
-    },
-    []
-  );
-
-  const moveToStash = useCallback(
-    (item: GeneratedItem) => {
-      setCharacter((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          inventory: prev.inventory.filter((i) => i.id !== item.id),
-          stash: [...prev.stash, item],
-        };
-      });
-    },
-    []
-  );
-
-  const moveFromStash = useCallback(
-    (item: GeneratedItem) => {
-      setCharacter((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          stash: prev.stash.filter((i) => i.id !== item.id),
-          inventory: [...prev.inventory, item],
-        };
-      });
-    },
-    []
-  );
-
-  const applyDeathPenalty = useCallback(
-    (isHardcore: boolean) => {
-      setCharacter((prev) => {
-        if (!prev) return prev;
-        if (isHardcore) {
-          // Hardcore: character is permanently dead (handled at app level)
-          return prev;
-        }
-        // Softcore: lose 10% of current XP (no gold penalty)
-        const xpLoss = Math.floor(prev.xp * 0.1);
-        const newXp = Math.max(0, prev.xp - xpLoss);
-        const newLevel = calcLevel(newXp);
-        const totalPoints = calcTotalAbilityPoints(newLevel);
-        const spentPoints = prev.ownedAbilityIds.length;
-        return {
-          ...prev,
-          xp: newXp,
-          level: newLevel,
-          availableAbilityPoints: Math.max(0, totalPoints - spentPoints),
-        };
-      });
-    },
-    []
-  );
-
-  const clearCharacter = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    setCharacter(null);
+  const applyDeathPenalty = useCallback((isHardcore: boolean) => {
+    setCharacterState((prev) => {
+      if (!prev) return prev;
+      if (isHardcore) return prev;
+      const xpLoss = Math.floor(prev.xp * 0.1);
+      const newXp = Math.max(0, prev.xp - xpLoss);
+      const newLevel = Math.max(1, Math.floor(newXp / 100) + 1);
+      const totalPoints = 1 + Math.floor(newLevel / 10);
+      const spentPoints = prev.ownedAbilityIds.length;
+      const updated: LocalCharacter = {
+        ...prev,
+        xp: newXp,
+        level: newLevel,
+        availableAbilityPoints: Math.max(0, totalPoints - spentPoints),
+        status: 'Alive',
+        currentHP: prev.maxHP,
+      };
+      saveLocalData(updated);
+      return updated;
+    });
   }, []);
 
   return {
     character,
-    initCharacter,
-    addXp,
+    initializeCharacter,
+    updateCharacter,
+    setCurrentHP,
+    clearCharacter,
+    // Legacy helpers
     applyStatPoints,
     purchaseAbility,
     equipAbility,
@@ -336,9 +324,27 @@ export function useLocalCharacter() {
     moveToStash,
     moveFromStash,
     applyDeathPenalty,
-    clearCharacter,
-    calcLevel,
-    calcXpForNextLevel,
-    calcTotalAbilityPoints,
   };
+}
+
+// Helper to save starter equipment for a newly created character by characterId
+export function saveStarterEquipmentForCharacter(
+  characterId: number,
+  equippedItems: GeneratedItem[]
+): void {
+  try {
+    const key = `localCharacter_v3_${characterId}`;
+    const existing = localStorage.getItem(key);
+    let data: Record<string, unknown> = {};
+    if (existing) {
+      try { data = JSON.parse(existing); } catch { data = {}; }
+    }
+    // Only set starter equipment if no equipped items already exist
+    if (!data.equippedItems || (data.equippedItems as GeneratedItem[]).length === 0) {
+      data.equippedItems = equippedItems;
+    }
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch {
+    // ignore
+  }
 }

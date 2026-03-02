@@ -1,34 +1,22 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LocalCharacter } from '../hooks/useLocalCharacter';
-import { runFullCombat, CombatLogEntry, CombatResult, spawnMonster, MonsterInstance } from '../engine/combatEngine';
-import { GeneratedItem } from '../engine/lootGenerator';
-import { useSubmitDungeonResult } from '../hooks/useQueries';
+import {
+  simulateCombat,
+  simulateAscensionTrial,
+  spawnMonster,
+  CombatResult,
+  CombatLogEntry,
+} from '../engine/combatEngine';
+import { generateLoot, GeneratedItem } from '../engine/lootGenerator';
+import { Loader2, ScrollText, Trophy, Skull, ChevronRight } from 'lucide-react';
 
 interface DungeonRunScreenProps {
   character: LocalCharacter;
   dungeonMode: 'Catacombs' | 'Depths' | 'AscensionTrial';
   dungeonLevel: number;
-  onComplete: (result: { survived: boolean; xpGained: number; loot: GeneratedItem[] }) => void;
+  onComplete: (result: { survived: boolean; xpGained: number; loot: GeneratedItem[]; remainingHp: number }) => void;
   onDeath: () => void;
 }
-
-const MODE_LABELS: Record<string, string> = {
-  Catacombs: '🏚️ Catacombs',
-  Depths: '🌑 The Depths',
-  AscensionTrial: '🔥 Ascension Trial',
-};
-
-const LOG_COLORS: Record<CombatLogEntry['type'], string> = {
-  player_attack: 'text-foreground',
-  monster_attack: 'text-red-400',
-  player_crit: 'text-yellow-400 font-semibold',
-  monster_crit: 'text-red-500 font-semibold',
-  player_death: 'text-red-600 font-bold',
-  monster_death: 'text-green-400 font-semibold',
-  loot: 'text-purple-400',
-  xp: 'text-blue-400',
-  info: 'text-muted-foreground',
-};
 
 export default function DungeonRunScreen({
   character,
@@ -41,209 +29,201 @@ export default function DungeonRunScreen({
   const [result, setResult] = useState<CombatResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [currentLogIndex, setCurrentLogIndex] = useState(0);
-  // Preview monster for showing stats before combat resolves
-  const [previewMonster, setPreviewMonster] = useState<MonsterInstance | null>(null);
+  const [loot, setLoot] = useState<GeneratedItem | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
-  const submitDungeonResult = useSubmitDungeonResult();
+  const hasStarted = useRef(false);
 
-  const startCombat = useCallback(() => {
+  const isAscension = dungeonMode === 'AscensionTrial';
+
+  const startCombat = () => {
     setIsRunning(true);
     setLog([]);
     setCurrentLogIndex(0);
     setResult(null);
 
-    const combatResult = runFullCombat(
-      {
-        str: character.stats.str,
-        dex: character.stats.dex,
-        int: character.stats.int,
-        vit: character.stats.vit,
-        level: character.level,
-        equippedItems: character.equippedItems,
-      },
-      dungeonLevel,
-      dungeonMode
-    );
+    let combatResult: CombatResult;
 
-    // Spawn a preview monster to show stats (separate instance for display only)
-    const preview = spawnMonster(dungeonLevel);
-    setPreviewMonster(preview);
+    if (isAscension) {
+      const ascResult = simulateAscensionTrial(character, character.currentHP);
+      const droppedItem = ascResult.itemDropped ? generateLoot(character.level + 5) : null;
+      combatResult = {
+        victory: ascResult.victory,
+        ticksElapsed: ascResult.log.length,
+        xpGained: ascResult.xpGained,
+        log: ascResult.log,
+        playerHpRemaining: ascResult.playerHpRemaining,
+        monsterHpRemaining: 0,
+        itemDropped: ascResult.itemDropped,
+        penaltyApplied: false,
+        remainingHp: ascResult.playerHpRemaining,
+        lootDropped: droppedItem,
+      };
+      setLoot(droppedItem);
+    } else {
+      const monster = spawnMonster(dungeonLevel);
+      combatResult = simulateCombat(character, monster, character.currentHP);
+      setLoot(combatResult.lootDropped);
+    }
+
     setResult(combatResult);
-  }, [character, dungeonLevel, dungeonMode]);
+  };
 
-  // Auto-start combat on mount
   useEffect(() => {
-    const timer = setTimeout(startCombat, 500);
+    if (hasStarted.current) return;
+    hasStarted.current = true;
+    const timer = setTimeout(startCombat, 400);
     return () => clearTimeout(timer);
-  }, [startCombat]);
+  }, []);
 
-  // Animate log entries one by one
+  // Animate log entries
   useEffect(() => {
     if (!result) return;
     if (currentLogIndex >= result.log.length) {
       setIsRunning(false);
       return;
     }
-
-    const delay = result.log[currentLogIndex].type === 'info' ? 400 : 250;
     const timer = setTimeout(() => {
       setLog((prev) => [...prev, result.log[currentLogIndex]]);
       setCurrentLogIndex((prev) => prev + 1);
-    }, delay);
-
+    }, 100);
     return () => clearTimeout(timer);
   }, [result, currentLogIndex]);
 
-  // Auto-scroll log
+  // Auto-scroll
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [log]);
 
-  // Submit XP to backend when combat finishes
-  useEffect(() => {
-    if (!result || isRunning) return;
-    if (result.victory && result.xpGained > 0) {
-      submitDungeonResult.mutate(result.xpGained);
-    }
-  }, [result, isRunning]);
-
   function handleContinue() {
     if (!result) return;
-    if (!result.survived) {
+    const survived = result.playerHpRemaining > 0;
+    if (!survived) {
       onDeath();
       return;
     }
     onComplete({
-      survived: result.survived,
+      survived,
       xpGained: result.xpGained,
-      loot: result.loot,
+      loot: loot ? [loot] : [],
+      remainingHp: result.remainingHp,
     });
   }
 
   const isFinished = !isRunning && result !== null && currentLogIndex >= (result?.log.length ?? 0);
 
+  const getLogColor = (entry: CombatLogEntry) => {
+    if (entry.actor === 'player') {
+      if (entry.abilityName) return 'text-purple-300';
+      if (entry.isCrit) return 'text-yellow-300';
+      return 'text-blue-300';
+    }
+    return 'text-red-300';
+  };
+
+  const formatLogEntry = (entry: CombatLogEntry) => {
+    const actor = entry.actor === 'player' ? character.name : 'Monster';
+    const critTag = entry.isCrit ? ' [CRIT!]' : '';
+    if (entry.healing) return `${actor} ${entry.action}: +${entry.healing} HP healed${critTag}`;
+    if (entry.damage !== undefined) return `${actor} ${entry.action}: ${entry.damage} dmg${critTag}`;
+    return `${actor} ${entry.action}`;
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
       {/* Header */}
-      <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
+      <div className="bg-surface-1 border border-border rounded-xl p-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-foreground">{MODE_LABELS[dungeonMode]}</h2>
-          <p className="text-sm text-muted-foreground">Dungeon Level {dungeonLevel}</p>
+          <h2 className="text-lg font-bold text-foreground font-display">
+            {isAscension ? '🔥 Ascension Trial' : '⚔️ Combat'}
+          </h2>
+          <p className="text-sm text-muted">
+            Level {dungeonLevel} encounter · Entering with {character.currentHP}/{character.maxHP} HP
+          </p>
         </div>
-        <div className="text-right text-sm text-muted-foreground">
-          <div>{character.name}</div>
-          <div>Level {character.level}</div>
-        </div>
+        {isRunning && <Loader2 className="w-5 h-5 text-primary animate-spin" />}
       </div>
 
-      {/* Monster Info Panel */}
-      {previewMonster && (
-        <div className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <span className="text-4xl">{previewMonster.template.emoji}</span>
-            <div className="flex-1">
-              <div className="font-bold text-foreground">{previewMonster.name}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                HP: {previewMonster.maxHp} · ATK: {previewMonster.attack} · DEF: {previewMonster.defense}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">Atk Speed</div>
-              <div className="text-sm font-semibold text-orange-400">
-                ⚡ {previewMonster.ticksBetweenAttacks} ticks
-              </div>
-            </div>
-          </div>
-          {/* Monster HP bar */}
-          <div className="mt-3">
-            <div className="flex justify-between text-xs text-muted-foreground mb-1">
-              <span>{previewMonster.name}</span>
-              <span>{previewMonster.maxHp} HP</span>
-            </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-red-500 rounded-full w-full transition-all duration-300" />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Combat Log */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-3">
-          Combat Log
-        </h3>
-        <div className="h-72 overflow-y-auto space-y-1 font-mono text-sm">
+      <div className="bg-surface-1 border border-border rounded-xl overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+          <ScrollText className="w-4 h-4 text-muted" />
+          <span className="text-sm font-medium text-foreground">Combat Log</span>
+        </div>
+        <div className="h-72 overflow-y-auto p-4 space-y-1 font-mono text-xs">
           {log.map((entry, i) => (
-            <div key={i} className={`${LOG_COLORS[entry.type]} leading-relaxed`}>
-              {entry.message}
+            <div key={i} className={`${getLogColor(entry)} leading-relaxed`}>
+              <span className="text-muted/50 mr-2">[{entry.tick}]</span>
+              {formatLogEntry(entry)}
             </div>
           ))}
           {isRunning && (
-            <div className="text-muted-foreground animate-pulse">⚔️ Combat in progress...</div>
+            <div className="text-muted animate-pulse">▋</div>
           )}
           <div ref={logEndRef} />
         </div>
       </div>
 
-      {/* Result Panel */}
+      {/* Result */}
       {isFinished && result && (
-        <div
-          className={`bg-card border rounded-xl p-5 ${
-            result.victory ? 'border-green-500/40' : 'border-red-500/40'
-          }`}
-        >
-          <h3
-            className={`text-xl font-bold mb-3 ${
-              result.victory ? 'text-green-400' : 'text-red-400'
-            }`}
-          >
-            {result.victory ? '🏆 Victory!' : '💀 Defeated'}
-          </h3>
+        <div className={`rounded-xl border p-5 ${
+          result.victory
+            ? 'bg-green-900/20 border-green-700/40'
+            : 'bg-red-900/20 border-red-700/40'
+        }`}>
+          <div className="flex items-center gap-3 mb-4">
+            {result.victory ? (
+              <Trophy className="w-8 h-8 text-yellow-400" />
+            ) : (
+              <Skull className="w-8 h-8 text-red-400" />
+            )}
+            <div>
+              <h3 className="text-lg font-bold text-foreground font-display">
+                {result.victory ? 'Victory!' : 'Defeated'}
+              </h3>
+              <p className="text-sm text-muted">
+                {result.victory
+                  ? `Remaining HP: ${result.remainingHp} / ${character.maxHP}`
+                  : 'You have fallen in battle'}
+              </p>
+            </div>
+          </div>
 
           {result.victory && (
-            <div className="space-y-2 text-sm">
-              {/* XP Gained */}
-              <div className="flex items-center gap-2 text-blue-400">
-                <span>✨</span>
-                <span>+{result.xpGained} XP gained</span>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-surface-2 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-yellow-400">+{result.xpGained}</div>
+                <div className="text-xs text-muted">Experience</div>
               </div>
-
-              {/* Loot */}
-              {result.loot.length > 0 && (
-                <div>
-                  <div className="text-muted-foreground mb-1">Items found:</div>
-                  {result.loot.map((item) => (
-                    <div key={item.id} className="flex items-center gap-2 text-purple-400 ml-2">
-                      <span>{item.icon}</span>
-                      <span>
-                        {item.name} ({item.rarity})
-                      </span>
-                    </div>
-                  ))}
+              <div className="bg-surface-2 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-green-400">
+                  {result.remainingHp} / {character.maxHP}
                 </div>
-              )}
+                <div className="text-xs text-muted">HP Remaining</div>
+              </div>
             </div>
           )}
 
-          {!result.survived && (
-            <div className="space-y-2 text-sm">
-              <div className="text-red-400">
-                {character.realm === 'Hardcore'
-                  ? '💀 Your character has died permanently.'
-                  : '💔 You lost 10% of your experience.'}
+          {loot && (
+            <div className="mb-4 bg-surface-2 rounded-lg p-3">
+              <div className="text-xs text-muted mb-1">Item Dropped</div>
+              <div className={`font-medium text-sm ${
+                loot.rarity === 'Legendary' ? 'text-yellow-400' :
+                loot.rarity === 'Rare' ? 'text-blue-400' :
+                loot.rarity === 'Uncommon' ? 'text-green-400' :
+                'text-foreground'
+              }`}>
+                {loot.icon} {loot.name}
               </div>
+              <div className="text-xs text-muted">{loot.rarity} {loot.itemType}</div>
             </div>
           )}
 
           <button
             onClick={handleContinue}
-            className={`mt-4 w-full py-2.5 rounded-lg font-semibold text-sm transition-all ${
-              result.victory
-                ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-            }`}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-all active:scale-95"
           >
-            {result.survived ? 'Continue' : character.realm === 'Hardcore' ? 'Accept Fate' : 'Respawn'}
+            Continue
+            <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       )}

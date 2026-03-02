@@ -1,11 +1,12 @@
 # Specification
 
 ## Summary
-**Goal:** Fix post-login routing so that players with an existing character for a selected realm skip character creation and land directly on the character sheet/dungeon screen.
+**Goal:** Grant new characters starter equipment at creation time and replace the non-functional drop rate slider in the Dungeon Select screen with a static informational display.
 
 **Planned changes:**
-- In `App.tsx`, after login and realm selection, query the backend for an existing character before rendering any screen; route directly to the character sheet/dungeon select screen if one exists, otherwise show `CharacterCreationScreen` as normal
-- In `App.tsx`, if `createCharacter` returns an `#alreadyExists` error (e.g. race condition), silently redirect to the character sheet/dungeon select screen instead of showing an error or crashing
-- In `backend/main.mo`, ensure `createCharacter` returns a distinct `#alreadyExists` error variant when a character already exists for the calling principal in the selected realm and current season
+- At character creation, automatically generate and equip a level 1 Common weapon and a level 1 Common armor piece using the existing `lootGenerator.ts` logic, placing them directly into the character's equipped weapon and armor slots.
+- Ensure the starter weapon provides meaningful base physical damage (well above 1 damage per hit vs. level 1 monsters) and the starter armor provides meaningful base defense (noticeably reducing incoming ~13 damage from level 1 monsters).
+- Remove the non-functional drop rate scroller/slider from `DungeonSelectScreen.tsx`.
+- Replace it with a static read-only text display showing the effective drop rate and XP rate for the selected monster level, calculated from the existing formula (6% base, −1% per level the monster is below the player, floor 0%).
 
-**User-visible outcome:** After logging in and selecting a realm, players who already have a character are taken straight to the character sheet/dungeon screen without seeing the character creation screen. New players still go through character creation as before.
+**User-visible outcome:** New characters always start with a weapon and armor equipped so early combat is viable. The Dungeon Select screen no longer shows a broken slider, instead cleanly displaying the calculated drop rate and XP rate as informational text.

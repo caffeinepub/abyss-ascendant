@@ -89,6 +89,11 @@ export class ExternalBlob {
         return this;
     }
 }
+export type CharacterId = number;
+export interface _CaffeineStorageRefillResult {
+    success?: boolean;
+    topped_up_amount?: bigint;
+}
 export interface _CaffeineStorageRefillInformation {
     proposed_top_up_amount?: bigint;
 }
@@ -102,7 +107,9 @@ export interface Character {
     int: bigint;
     str: bigint;
     vit: bigint;
+    maxHP: bigint;
     status: CharacterStatus;
+    currentHP: bigint;
     name: string;
     season: bigint;
     level: bigint;
@@ -129,16 +136,13 @@ export interface Item {
     itemType: ItemType;
     rarity: Rarity;
 }
-export interface _CaffeineStorageRefillResult {
-    success?: boolean;
-    topped_up_amount?: bigint;
-}
 export interface UserProfile {
     username: string;
 }
 export enum CharacterCreationError {
     noPermission = "noPermission",
-    alreadyExists = "alreadyExists"
+    alreadyExists = "alreadyExists",
+    limitReached = "limitReached"
 }
 export enum CharacterStatus {
     Dead = "Dead",
@@ -159,6 +163,12 @@ export enum Realm {
     Hardcore = "Hardcore",
     Softcore = "Softcore"
 }
+export enum SetHpError {
+    noPermission = "noPermission",
+    characterNotFound = "characterNotFound",
+    maxHPExceeded = "maxHPExceeded",
+    alreadyFullHP = "alreadyFullHP"
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -176,14 +186,15 @@ export interface backendInterface {
     buyItem(itemId: string): Promise<void>;
     createCharacter(name: string, realm: Realm): Promise<{
         __kind__: "ok";
-        ok: null;
+        ok: CharacterId;
     } | {
         __kind__: "err";
         err: CharacterCreationError;
     }>;
+    deleteCharacter(characterId: CharacterId): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
-    getCharacter(): Promise<Character | null>;
+    getCharacters(): Promise<Array<Character>>;
     getItem(itemId: string): Promise<Item | null>;
     getItemImage(itemId: string): Promise<ExternalBlob>;
     getMarketplaceListings(): Promise<Array<MarketplaceListing>>;
@@ -191,10 +202,16 @@ export interface backendInterface {
     isCallerAdmin(): Promise<boolean>;
     listItemForSale(itemId: string, price: bigint): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    submitDungeonResult(xpGained: bigint): Promise<void>;
+    setCharacterHp(characterId: CharacterId, hp: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: SetHpError;
+    }>;
     uploadItemImage(itemId: string, externalBlob: ExternalBlob): Promise<void>;
 }
-import type { Character as _Character, CharacterCreationError as _CharacterCreationError, CharacterStatus as _CharacterStatus, ExternalBlob as _ExternalBlob, Item as _Item, ItemType as _ItemType, MarketplaceListing as _MarketplaceListing, Rarity as _Rarity, Realm as _Realm, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
+import type { Character as _Character, CharacterCreationError as _CharacterCreationError, CharacterId as _CharacterId, CharacterStatus as _CharacterStatus, ExternalBlob as _ExternalBlob, Item as _Item, ItemType as _ItemType, MarketplaceListing as _MarketplaceListing, Rarity as _Rarity, Realm as _Realm, SetHpError as _SetHpError, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
@@ -325,7 +342,7 @@ export class Backend implements backendInterface {
     }
     async createCharacter(arg0: string, arg1: Realm): Promise<{
         __kind__: "ok";
-        ok: null;
+        ok: CharacterId;
     } | {
         __kind__: "err";
         err: CharacterCreationError;
@@ -341,6 +358,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.createCharacter(arg0, to_candid_Realm_n10(this._uploadFile, this._downloadFile, arg1));
             return from_candid_variant_n12(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async deleteCharacter(arg0: CharacterId): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteCharacter(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteCharacter(arg0);
+            return result;
         }
     }
     async getCallerUserProfile(): Promise<UserProfile | null> {
@@ -371,18 +402,18 @@ export class Backend implements backendInterface {
             return from_candid_UserRole_n16(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getCharacter(): Promise<Character | null> {
+    async getCharacters(): Promise<Array<Character>> {
         if (this.processError) {
             try {
-                const result = await this.actor.getCharacter();
-                return from_candid_opt_n18(this._uploadFile, this._downloadFile, result);
+                const result = await this.actor.getCharacters();
+                return from_candid_vec_n18(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getCharacter();
-            return from_candid_opt_n18(this._uploadFile, this._downloadFile, result);
+            const result = await this.actor.getCharacters();
+            return from_candid_vec_n18(this._uploadFile, this._downloadFile, result);
         }
     }
     async getItem(arg0: string): Promise<Item | null> {
@@ -483,31 +514,37 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async submitDungeonResult(arg0: bigint): Promise<void> {
+    async setCharacterHp(arg0: CharacterId, arg1: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: SetHpError;
+    }> {
         if (this.processError) {
             try {
-                const result = await this.actor.submitDungeonResult(arg0);
-                return result;
+                const result = await this.actor.setCharacterHp(arg0, arg1);
+                return from_candid_variant_n36(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.submitDungeonResult(arg0);
-            return result;
+            const result = await this.actor.setCharacterHp(arg0, arg1);
+            return from_candid_variant_n36(this._uploadFile, this._downloadFile, result);
         }
     }
     async uploadItemImage(arg0: string, arg1: ExternalBlob): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.uploadItemImage(arg0, await to_candid_ExternalBlob_n36(this._uploadFile, this._downloadFile, arg1));
+                const result = await this.actor.uploadItemImage(arg0, await to_candid_ExternalBlob_n39(this._uploadFile, this._downloadFile, arg1));
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.uploadItemImage(arg0, await to_candid_ExternalBlob_n36(this._uploadFile, this._downloadFile, arg1));
+            const result = await this.actor.uploadItemImage(arg0, await to_candid_ExternalBlob_n39(this._uploadFile, this._downloadFile, arg1));
             return result;
         }
     }
@@ -539,6 +576,9 @@ function from_candid_Rarity_n30(_uploadFile: (file: ExternalBlob) => Promise<Uin
 function from_candid_Realm_n23(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Realm): Realm {
     return from_candid_variant_n24(_uploadFile, _downloadFile, value);
 }
+function from_candid_SetHpError_n37(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _SetHpError): SetHpError {
+    return from_candid_variant_n38(_uploadFile, _downloadFile, value);
+}
 function from_candid_UserRole_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserRole): UserRole {
     return from_candid_variant_n17(_uploadFile, _downloadFile, value);
 }
@@ -547,9 +587,6 @@ function from_candid__CaffeineStorageRefillResult_n4(_uploadFile: (file: Externa
 }
 function from_candid_opt_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfile]): UserProfile | null {
     return value.length === 0 ? null : value[0];
-}
-function from_candid_opt_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Character]): Character | null {
-    return value.length === 0 ? null : from_candid_Character_n19(_uploadFile, _downloadFile, value[0]);
 }
 function from_candid_opt_n25(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Item]): Item | null {
     return value.length === 0 ? null : from_candid_Item_n26(_uploadFile, _downloadFile, value[0]);
@@ -566,7 +603,9 @@ function from_candid_record_n20(_uploadFile: (file: ExternalBlob) => Promise<Uin
     int: bigint;
     str: bigint;
     vit: bigint;
+    maxHP: bigint;
     status: _CharacterStatus;
+    currentHP: bigint;
     name: string;
     season: bigint;
     level: bigint;
@@ -578,7 +617,9 @@ function from_candid_record_n20(_uploadFile: (file: ExternalBlob) => Promise<Uin
     int: bigint;
     str: bigint;
     vit: bigint;
+    maxHP: bigint;
     status: CharacterStatus;
+    currentHP: bigint;
     name: string;
     season: bigint;
     level: bigint;
@@ -591,7 +632,9 @@ function from_candid_record_n20(_uploadFile: (file: ExternalBlob) => Promise<Uin
         int: value.int,
         str: value.str,
         vit: value.vit,
+        maxHP: value.maxHP,
         status: from_candid_CharacterStatus_n21(_uploadFile, _downloadFile, value.status),
+        currentHP: value.currentHP,
         name: value.name,
         season: value.season,
         level: value.level,
@@ -666,12 +709,12 @@ function from_candid_record_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint
     };
 }
 function from_candid_variant_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: null;
+    ok: _CharacterId;
 } | {
     err: _CharacterCreationError;
 }): {
     __kind__: "ok";
-    ok: null;
+    ok: CharacterId;
 } | {
     __kind__: "err";
     err: CharacterCreationError;
@@ -688,8 +731,10 @@ function from_candid_variant_n14(_uploadFile: (file: ExternalBlob) => Promise<Ui
     noPermission: null;
 } | {
     alreadyExists: null;
+} | {
+    limitReached: null;
 }): CharacterCreationError {
-    return "noPermission" in value ? CharacterCreationError.noPermission : "alreadyExists" in value ? CharacterCreationError.alreadyExists : value;
+    return "noPermission" in value ? CharacterCreationError.noPermission : "alreadyExists" in value ? CharacterCreationError.alreadyExists : "limitReached" in value ? CharacterCreationError.limitReached : value;
 }
 function from_candid_variant_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     admin: null;
@@ -734,10 +779,43 @@ function from_candid_variant_n31(_uploadFile: (file: ExternalBlob) => Promise<Ui
 }): Rarity {
     return "Rare" in value ? Rarity.Rare : "Uncommon" in value ? Rarity.Uncommon : "Legendary" in value ? Rarity.Legendary : "Common" in value ? Rarity.Common : value;
 }
+function from_candid_variant_n36(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    ok: null;
+} | {
+    err: _SetHpError;
+}): {
+    __kind__: "ok";
+    ok: null;
+} | {
+    __kind__: "err";
+    err: SetHpError;
+} {
+    return "ok" in value ? {
+        __kind__: "ok",
+        ok: value.ok
+    } : "err" in value ? {
+        __kind__: "err",
+        err: from_candid_SetHpError_n37(_uploadFile, _downloadFile, value.err)
+    } : value;
+}
+function from_candid_variant_n38(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    noPermission: null;
+} | {
+    characterNotFound: null;
+} | {
+    maxHPExceeded: null;
+} | {
+    alreadyFullHP: null;
+}): SetHpError {
+    return "noPermission" in value ? SetHpError.noPermission : "characterNotFound" in value ? SetHpError.characterNotFound : "maxHPExceeded" in value ? SetHpError.maxHPExceeded : "alreadyFullHP" in value ? SetHpError.alreadyFullHP : value;
+}
+function from_candid_vec_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_Character>): Array<Character> {
+    return value.map((x)=>from_candid_Character_n19(_uploadFile, _downloadFile, x));
+}
 function from_candid_vec_n33(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_MarketplaceListing>): Array<MarketplaceListing> {
     return value.map((x)=>from_candid_MarketplaceListing_n34(_uploadFile, _downloadFile, x));
 }
-async function to_candid_ExternalBlob_n36(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: ExternalBlob): Promise<_ExternalBlob> {
+async function to_candid_ExternalBlob_n39(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: ExternalBlob): Promise<_ExternalBlob> {
     return await _uploadFile(value);
 }
 function to_candid_Realm_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Realm): _Realm {

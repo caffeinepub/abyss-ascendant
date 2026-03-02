@@ -1,24 +1,23 @@
 import Map "mo:core/Map";
-import Nat "mo:core/Nat";
-import Text "mo:core/Text";
-import Array "mo:core/Array";
-import Iter "mo:core/Iter";
-import Principal "mo:core/Principal";
-import Storage "blob-storage/Storage";
-import AccessControl "authorization/access-control";
+import List "mo:core/List";
+import Nat8 "mo:core/Nat8";
 
 module {
-  public type MarketplaceListing = {
-    item : Item;
-    price : Nat;
-    seller : Principal;
-    active : Bool;
+  public type Rarity = {
+    #Common;
+    #Uncommon;
+    #Rare;
+    #Legendary;
   };
 
   public type Item = {
     id : Text;
     name : Text;
-    itemType : ItemType;
+    itemType : {
+      #Weapon;
+      #Armor;
+      #Trinket;
+    };
     rarity : Rarity;
     stats : {
       str : Nat;
@@ -30,53 +29,39 @@ module {
     owner : Principal;
   };
 
-  public type ItemType = { #Weapon; #Armor; #Trinket };
-  public type Rarity = {
-    #Common;
-    #Uncommon;
-    #Rare;
-    #Legendary;
-  };
-
   public type Character = {
     name : Text;
-    realm : Realm;
+    realm : {
+      #Softcore;
+      #Hardcore;
+    };
     classTier : Nat;
     level : Nat;
     xp : Nat;
     season : Nat;
-    status : CharacterStatus;
+    status : {
+      #Alive;
+      #Dead;
+    };
     str : Nat;
     dex : Nat;
     int : Nat;
     vit : Nat;
+    maxHP : Nat;
+    currentHP : Nat;
   };
 
-  public type Realm = { #Softcore; #Hardcore };
-  public type CharacterStatus = { #Alive; #Dead };
-
-  public type UserProfile = {
-    username : Text;
+  public type CharacterSlot = {
+    id : Nat8;
+    character : Character;
   };
 
   public type OldActor = {
-    userProfiles : Map.Map<Principal, UserProfile>;
-    currentSeason : Nat;
-    characters : Map.Map<Principal, Character>;
-    items : Map.Map<Text, Item>;
-    marketplace : Map.Map<Text, MarketplaceListing>;
-    itemImages : Map.Map<Text, Storage.ExternalBlob>;
-    accessControlState : AccessControl.AccessControlState;
+    characters : Map.Map<Principal, List.List<CharacterSlot>>;
   };
 
   public type NewActor = {
-    userProfiles : Map.Map<Principal, UserProfile>;
-    currentSeason : Nat;
-    characters : Map.Map<Principal, Character>;
-    items : Map.Map<Text, Item>;
-    marketplace : Map.Map<Text, MarketplaceListing>;
-    itemImages : Map.Map<Text, Storage.ExternalBlob>;
-    accessControlState : AccessControl.AccessControlState;
+    characters : Map.Map<Principal, List.List<CharacterSlot>>;
   };
 
   public func run(old : OldActor) : NewActor { old };

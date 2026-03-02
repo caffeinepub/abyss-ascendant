@@ -1,75 +1,61 @@
 {
   "kind": "build_request",
-  "title": "Fix post-login routing: skip character creation when character already exists",
+  "title": "Add Starting Equipment for New Characters & Clean Up Drop Rate UI",
   "projectName": "Abyss Ascendant",
   "priority": "normal",
   "requirements": [
     {
-      "id": "REQ-29",
-      "text": "In App.tsx, after a user logs in and a realm is selected, query the backend for an existing character for that realm before showing any screen. If a character already exists for the selected realm in the current season, skip the CharacterCreationScreen entirely and route the player directly to the character sheet / dungeon select screen. The character creation screen must only be shown when no character exists for the chosen realm.",
-      "target": "frontend",
+      "id": "REQ-47",
+      "text": "When a new character is created, automatically grant them a starter equipment set consisting of at minimum one Weapon and one Armor piece. The starter weapon must provide enough base physical damage so that the character deals meaningful damage to level 1 monsters (well above 1 damage). The starter armor must provide enough base defense to meaningfully reduce incoming damage from level 1 monsters (which currently deal ~13 damage). Generate these items using the existing lootGenerator.ts item generation logic at item level 1 with Common rarity, then immediately equip them to the character's weapon and armor slots. This must happen at character creation time so the player never starts a dungeon run unequipped.",
+      "target": "both",
       "source": {
         "messageIds": [
-          "msg-4",
-          "msg-5"
+          "msg-3"
         ],
         "quotes": [
-          "Before showing the character creation screen, check if a character already exists for the selected realm — if so, skip creation and route directly to the character sheet/dungeon screen.",
-          "if a character already exists for the selected realm (Softcore or Hardcore), the app skips character creation entirely and routes the player directly to the character sheet/dungeon screen"
+          "My character does 1 damage and the level 1 monster does 13, and my starting character only has 20 life. Lets add basic equipment when you create a character."
         ]
       },
       "acceptanceCriteria": [
-        "After login, if a character exists for the selected realm, the CharacterCreationScreen is never rendered and the player lands on the character sheet or dungeon select screen.",
-        "After login, if no character exists for the selected realm, the CharacterCreationScreen is shown as normal.",
-        "This behavior applies to both Softcore and Hardcore realm selections.",
-        "No 'Actor Not Available' or unhandled error is shown when a character already exists."
+        "A newly created character has a weapon equipped in their weapon slot from the moment the character sheet is first shown.",
+        "A newly created character has an armor piece equipped in their armor slot from the moment the character sheet is first shown.",
+        "The starter weapon provides sufficient base physical damage so that level 1 combat results in more than 1 damage per hit against a level 1 monster.",
+        "The starter armor provides sufficient base defense so that level 1 monster attacks deal noticeably less than 13 damage to the player.",
+        "Starter items are generated at item level 1 with Common rarity via the existing lootGenerator logic.",
+        "The starter items appear in the character's equipped slots (not just inventory) immediately after character creation."
       ]
     },
     {
-      "id": "REQ-30",
-      "text": "In the backend (main.mo), ensure the createCharacter function returns a clear #alreadyExists error variant when a character already exists for the calling principal in the selected realm and current season. The frontend must never receive an ambiguous error for this case.",
-      "target": "backend",
-      "source": {
-        "messageIds": [
-          "msg-4"
-        ],
-        "quotes": [
-          "Ensure createCharacter returns a clear #alreadyExists variant so the frontend can distinguish 'already has a character' from a genuine failure."
-        ]
-      },
-      "acceptanceCriteria": [
-        "Calling createCharacter when a character already exists returns a Result with an #alreadyExists error variant.",
-        "The #alreadyExists variant is distinct from other error variants (e.g., #invalidInput, #unauthorized).",
-        "Calling createCharacter when no character exists for that realm proceeds normally and creates the character."
-      ]
-    },
-    {
-      "id": "REQ-31",
-      "text": "In App.tsx, if createCharacter is called and returns an #alreadyExists error (e.g., due to a race condition or duplicate call), the frontend must silently redirect the player to the character sheet / dungeon select screen rather than displaying an error message or crashing.",
+      "id": "REQ-48",
+      "text": "In DungeonSelectScreen.tsx, remove the non-functional drop rate percentage scroller/slider UI element. Replace it with a clean static informational display showing the current effective XP rate and drop rate for the selected monster level, calculated using the existing flat 6% base drop rate logic (6% base, reduced by 1% per level the monster is below the player's level, flooring at 0%). The display should be read-only text, matching the cleaner informational style used in prior versions of the screen.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-3"
         ],
         "quotes": [
-          "If createCharacter is somehow still called and returns #alreadyExists, the frontend should silently redirect rather than showing an error."
+          "The drop % scroller doesn't change, it's just a static 6%. Might as well remove it and just show the experience/drop % like the prior version."
         ]
       },
       "acceptanceCriteria": [
-        "If createCharacter returns #alreadyExists, no error toast or error screen is shown.",
-        "The player is automatically routed to the character sheet or dungeon select screen.",
-        "The app does not crash or enter an unrecoverable state."
+        "The drop rate scroller/slider is completely removed from DungeonSelectScreen.tsx.",
+        "A static text display shows the current calculated drop rate based on the chosen monster level and player level.",
+        "The displayed drop rate reflects the flat 6% base minus 1% per level the monster is below the player (e.g., same level = 6%, 3 levels below = 3%, 6+ levels below = 0%).",
+        "XP rate information is also displayed statically alongside the drop rate.",
+        "No interactive input element exists for modifying the drop rate — it is purely informational."
       ]
     }
   ],
   "constraints": [
-    "Do not modify files under frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, or frontend/src/components/ui.",
-    "All Motoko logic must remain in the single main actor file (backend/main.mo)."
+    "Do not modify any files listed in frontend.immutablePaths.",
+    "Starter equipment generation must use the existing lootGenerator.ts logic — do not introduce a separate item creation pathway.",
+    "The backend character record must store the starter equipment in the same equipped slots structure used by all other equipment."
   ],
   "nonGoals": [
-    "Changing the character creation form UI or stat allocation flow.",
-    "Modifying realm selection logic beyond the routing fix.",
-    "Any changes to combat, loot, or leaderboard systems."
+    "Changing the drop rate formula itself (it remains 6% base minus 1% per level gap).",
+    "Adding starter abilities or consumables — only weapon and armor.",
+    "Rebalancing monster stats or player base stats beyond what the starter equipment provides.",
+    "Changing the XP reward formula."
   ],
   "imageRequirements": {
     "required": [],

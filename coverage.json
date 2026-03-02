@@ -1,61 +1,54 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T02:04:30.143Z",
+  "generatedAt": "2026-03-02T04:04:27.967Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 3,
+    "total": 2,
     "implemented": 2,
     "items": [
       {
-        "id": "REQ-29",
-        "summary": "In App.tsx, after a user logs in and a realm is selected, query the backend for an existing character for that realm before showing any screen. If a character already exists for the selected realm in the current season, skip the CharacterCreationScreen entirely and route the player directly to the character sheet / dungeon select screen. The character creation screen must only be shown when no character exists for the chosen realm.",
+        "id": "REQ-47",
+        "summary": "When a new character is created, automatically grant them a starter equipment set consisting of at minimum one Weapon and one Armor piece. The starter weapon must provide enough base physical damage so that the character deals meaningful damage to level 1 monsters (well above 1 damage). The starter armor must provide enough base defense to meaningfully reduce incoming damage from level 1 monsters (which currently deal ~13 damage). Generate these items using the existing lootGenerator.ts item generation logic at item level 1 with Common rarity, then immediately equip them to the character's weapon and armor slots. This must happen at character creation time so the player never starts a dungeon run unequipped.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/App.tsx"
+          "frontend/src/engine/lootGenerator.ts",
+          "frontend/src/components/CharacterCreation.tsx",
+          "frontend/src/hooks/useLocalCharacter.ts"
         ],
         "matchedFiles": [
-          "frontend/src/App.tsx"
+          "frontend/src/engine/lootGenerator.ts",
+          "frontend/src/components/CharacterCreation.tsx",
+          "frontend/src/hooks/useLocalCharacter.ts"
         ]
       },
       {
-        "id": "REQ-30",
-        "summary": "In the backend (main.mo), ensure the createCharacter function returns a clear #alreadyExists error variant when a character already exists for the calling principal in the selected realm and current season. The frontend must never receive an ambiguous error for this case.",
-        "status": "unknown",
-        "plannedFiles": [],
-        "matchedFiles": []
-      },
-      {
-        "id": "REQ-31",
-        "summary": "In App.tsx, if createCharacter is called and returns an #alreadyExists error (e.g., due to a race condition or duplicate call), the frontend must silently redirect the player to the character sheet / dungeon select screen rather than displaying an error message or crashing.",
+        "id": "REQ-48",
+        "summary": "In DungeonSelectScreen.tsx, remove the non-functional drop rate percentage scroller/slider UI element. Replace it with a clean static informational display showing the current effective XP rate and drop rate for the selected monster level, calculated using the existing flat 6% base drop rate logic (6% base, reduced by 1% per level the monster is below the player's level, flooring at 0%). The display should be read-only text, matching the cleaner informational style used in prior versions of the screen.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/App.tsx",
-          "frontend/src/hooks/useQueries.ts"
+          "frontend/src/components/DungeonSelectScreen.tsx"
         ],
         "matchedFiles": [
-          "frontend/src/App.tsx",
-          "frontend/src/hooks/useQueries.ts"
+          "frontend/src/components/DungeonSelectScreen.tsx"
         ]
       }
     ]
   },
   "changedFiles": [
     "backend/main.mo",
+    "backend/migration.mo",
     "build-request.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
-    "frontend/src/App.tsx",
-    "frontend/src/backend.d.ts",
-    "frontend/src/backend.ts",
     "frontend/src/components/CharacterCreation.tsx",
-    "frontend/src/declarations/backend.did.d.ts",
-    "frontend/src/declarations/backend.did.js",
-    "frontend/src/hooks/useQueries.ts",
+    "frontend/src/components/DungeonSelectScreen.tsx",
+    "frontend/src/engine/lootGenerator.ts",
+    "frontend/src/hooks/useLocalCharacter.ts",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

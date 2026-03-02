@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { LocalCharacter } from '../hooks/useLocalCharacter';
 import { ABILITIES } from '../data/abilities';
 import AbilitySelectModal from './AbilitySelectModal';
-import { derivePlayerStats, calculatePlayerTicksBetweenAttacks } from '../engine/combatEngine';
+import LevelUpModal from './LevelUpModal';
+import { derivePlayerStats, PLAYER_BASE_TICKS_BETWEEN_ATTACKS } from '../engine/combatEngine';
 
 interface CharacterSheetProps {
   character: LocalCharacter;
@@ -20,44 +21,25 @@ export default function CharacterSheet({
   onUnequipAbility,
 }: CharacterSheetProps) {
   const [showAbilityModal, setShowAbilityModal] = useState(false);
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false);
 
   const { stats, level, xp, realm, equippedAbilityIds, availableAbilityPoints } = character;
 
-  // Derive effective combat stats using the same engine function used in combat
-  // This ensures CharacterSheet always matches what combat actually uses
-  const effectiveStats = derivePlayerStats({
-    str: stats.str,
-    dex: stats.dex,
-    int: stats.int,
-    vit: stats.vit,
-    level,
-    equippedItems: character.equippedItems,
-  });
+  const effectiveStats = derivePlayerStats(character);
 
   const maxHp = effectiveStats.maxHp;
-  const physDmg = effectiveStats.attack;
+  const physDmg = effectiveStats.physicalDamage;
+  const magDmg = effectiveStats.magicDamage;
   const defense = effectiveStats.defense;
   const critChance = effectiveStats.critChance;
-  const ticksBetweenAttacks = effectiveStats.ticksBetweenAttacks;
+  const ticksBetweenAttacks = PLAYER_BASE_TICKS_BETWEEN_ATTACKS;
 
-  // Magic damage is derived separately (int-based, not in CombatStats directly)
-  const magDmg = Math.floor(
-    5 + stats.int * 2 +
-    (character.equippedItems?.reduce((sum, item) => {
-      const magAffix = item.affixes.find((a) => a.stat === 'magDmg');
-      const intAffix = item.affixes.find((a) => a.stat === 'int');
-      return sum + (magAffix?.value ?? 0) + (intAffix ? intAffix.value * 2 : 0);
-    }, 0) ?? 0)
-  );
-
-  // XP progress
   const xpForCurrentLevel = (level - 1) * 100;
   const xpForNextLevel = level * 100;
   const xpProgress = xp - xpForCurrentLevel;
   const xpNeeded = xpForNextLevel - xpForCurrentLevel;
   const xpPercent = Math.min(100, Math.floor((xpProgress / xpNeeded) * 100));
 
-  // Ability points: 1 at creation + 1 per 10 levels
   const totalAbilityPoints = 1 + Math.floor(level / 10);
 
   const equippedAbilities = equippedAbilityIds
@@ -65,17 +47,20 @@ export default function CharacterSheet({
     .map((id) => ABILITIES.find((a) => a.id === id))
     .filter(Boolean);
 
+  const abilityCount = equippedAbilities.length;
+  const attackChance = Math.round((1 - abilityCount * 0.125) * 100);
+
   const realmLabel = realm === 'Hardcore' ? '💀 Hardcore' : '🛡️ Softcore';
-  const classTierLabel = `Tier ${character.level >= 100 ? '🔥' : ''}1`;
+  const classTierLabel = `Tier ${character.classTier ?? 1}`;
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
       {/* Character Header */}
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-surface-1 border border-border rounded-xl p-5">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-foreground">{character.name}</h2>
-            <div className="flex gap-3 mt-1 text-sm text-muted-foreground">
+            <h2 className="text-2xl font-bold text-foreground font-display">{character.name}</h2>
+            <div className="flex gap-3 mt-1 text-sm text-muted">
               <span>{realmLabel}</span>
               <span>•</span>
               <span>Class {classTierLabel}</span>
@@ -85,19 +70,19 @@ export default function CharacterSheet({
           </div>
           <div className="text-right">
             <div className="text-3xl font-bold text-primary">{level}</div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">Level</div>
+            <div className="text-xs text-muted uppercase tracking-wider">Level</div>
           </div>
         </div>
 
         {/* XP Bar */}
         <div className="mt-4">
-          <div className="flex justify-between text-xs text-muted-foreground mb-1">
+          <div className="flex justify-between text-xs text-muted mb-1">
             <span>Experience</span>
             <span>
               {xpProgress} / {xpNeeded} XP
             </span>
           </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
             <div
               className="h-full bg-primary rounded-full transition-all duration-500"
               style={{ width: `${xpPercent}%` }}
@@ -107,31 +92,34 @@ export default function CharacterSheet({
       </div>
 
       {/* Stats */}
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-surface-1 border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
             Attributes
           </h3>
           {character.pendingStatPoints > 0 && (
-            <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-semibold animate-pulse">
+            <button
+              onClick={() => setShowLevelUpModal(true)}
+              className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-semibold animate-pulse hover:bg-amber-500/30 transition-all"
+            >
               {character.pendingStatPoints} points to spend!
-            </span>
+            </button>
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           {[
-            { key: 'str', label: 'Strength', icon: '💪', color: 'text-red-400' },
-            { key: 'dex', label: 'Dexterity', icon: '🏃', color: 'text-green-400' },
-            { key: 'int', label: 'Intelligence', icon: '🧠', color: 'text-blue-400' },
-            { key: 'vit', label: 'Vitality', icon: '❤️', color: 'text-pink-400' },
+            { key: 'str' as const, label: 'Strength', icon: '💪', color: 'text-red-400' },
+            { key: 'dex' as const, label: 'Dexterity', icon: '🏃', color: 'text-green-400' },
+            { key: 'int' as const, label: 'Intelligence', icon: '🧠', color: 'text-blue-400' },
+            { key: 'vit' as const, label: 'Vitality', icon: '❤️', color: 'text-pink-400' },
           ].map(({ key, label, icon, color }) => (
-            <div key={key} className="flex items-center gap-2 bg-background rounded-lg p-3">
+            <div key={key} className="flex items-center gap-2 bg-surface-2 rounded-lg p-3">
               <span className="text-lg">{icon}</span>
               <div className="flex-1">
-                <div className="text-xs text-muted-foreground">{label}</div>
+                <div className="text-xs text-muted">{label}</div>
                 <div className={`text-lg font-bold ${color}`}>
-                  {stats[key as keyof typeof stats]}
+                  {stats[key]}
                 </div>
               </div>
               {character.pendingStatPoints > 0 && (
@@ -148,11 +136,11 @@ export default function CharacterSheet({
       </div>
 
       {/* Combat Stats */}
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-surface-1 border border-border rounded-xl p-5">
         <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-3">
           Combat Stats
           {character.equippedItems && character.equippedItems.length > 0 && (
-            <span className="ml-2 text-xs font-normal text-muted-foreground normal-case">
+            <span className="ml-2 text-xs font-normal text-muted normal-case">
               (includes equipped gear)
             </span>
           )}
@@ -163,20 +151,45 @@ export default function CharacterSheet({
             { label: 'Phys Dmg', value: physDmg, icon: '⚔️' },
             { label: 'Magic Dmg', value: magDmg, icon: '✨' },
             { label: 'Defense', value: defense, icon: '🛡️' },
-            { label: 'Crit Chance', value: `${critChance.toFixed(1)}%`, icon: '🎯' },
-            { label: 'Atk Speed', value: `${ticksBetweenAttacks} ticks`, icon: '⚡' },
+            { label: 'Crit Chance', value: `${(critChance * 100).toFixed(1)}%`, icon: '🎯' },
+            { label: 'Atk Speed (ticks)', value: ticksBetweenAttacks, icon: '⚡' },
           ].map(({ label, value, icon }) => (
-            <div key={label} className="bg-background rounded-lg p-3 text-center">
+            <div key={label} className="bg-surface-2 rounded-lg p-3 text-center">
               <div className="text-lg">{icon}</div>
               <div className="text-lg font-bold text-foreground">{value}</div>
-              <div className="text-xs text-muted-foreground">{label}</div>
+              <div className="text-xs text-muted">{label}</div>
             </div>
           ))}
         </div>
       </div>
 
+      {/* Attack Cycle Info */}
+      {abilityCount > 0 && (
+        <div className="bg-surface-1 border border-border rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-3">
+            Attack Cycle
+          </h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between items-center">
+              <span className="text-muted">Normal Attack</span>
+              <span className="font-bold text-primary">{attackChance}%</span>
+            </div>
+            {equippedAbilities.map((ability) =>
+              ability ? (
+                <div key={ability.id} className="flex justify-between items-center">
+                  <span className="text-muted">
+                    {ability.icon} {ability.name}
+                  </span>
+                  <span className="font-bold text-purple-400">12.5%</span>
+                </div>
+              ) : null
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Abilities */}
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-surface-1 border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
             Active Abilities
@@ -187,6 +200,9 @@ export default function CharacterSheet({
                 {availableAbilityPoints} pt{availableAbilityPoints !== 1 ? 's' : ''} available
               </span>
             )}
+            <span className="text-xs text-muted">
+              {totalAbilityPoints} total pts
+            </span>
             <button
               onClick={() => setShowAbilityModal(true)}
               className="text-xs px-3 py-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 font-semibold transition-all"
@@ -196,41 +212,31 @@ export default function CharacterSheet({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          {[0, 1, 2].map((slotIdx) => {
-            const ability = equippedAbilities[slotIdx];
-            return (
-              <div
-                key={slotIdx}
-                className={`rounded-lg border p-3 text-center ${
-                  ability
-                    ? 'border-primary/40 bg-primary/5'
-                    : 'border-dashed border-border/50 bg-background/50'
-                }`}
-              >
-                {ability ? (
-                  <>
-                    <div className="text-2xl">{ability.icon}</div>
-                    <div className="text-xs font-medium text-foreground mt-1 truncate">
-                      {ability.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground">⏱ {ability.cooldown}s</div>
-                  </>
-                ) : (
-                  <div className="text-muted-foreground text-xs py-2">Empty Slot</div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Ability Points Info */}
-        <div className="mt-3 text-xs text-muted-foreground text-center">
-          Total ability points: {totalAbilityPoints} (Level {level} • +1 per 10 levels)
-        </div>
+        {equippedAbilities.length === 0 ? (
+          <p className="text-sm text-muted text-center py-4">
+            No abilities equipped. Click Manage to learn and equip abilities.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {equippedAbilities.map((ability) =>
+              ability ? (
+                <div
+                  key={ability.id}
+                  className="flex items-center gap-3 bg-surface-2 rounded-lg p-3"
+                >
+                  <span className="text-xl">{ability.icon}</span>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-foreground">{ability.name}</div>
+                    <div className="text-xs text-muted">{ability.description}</div>
+                  </div>
+                  <span className="text-xs text-purple-400 font-bold">12.5%</span>
+                </div>
+              ) : null
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Ability Modal */}
       {showAbilityModal && (
         <AbilitySelectModal
           character={character}
@@ -238,6 +244,14 @@ export default function CharacterSheet({
           onEquip={onEquipAbility}
           onUnequip={onUnequipAbility}
           onClose={() => setShowAbilityModal(false)}
+        />
+      )}
+
+      {showLevelUpModal && character.pendingStatPoints > 0 && (
+        <LevelUpModal
+          character={character}
+          onAllocate={(stat, amount) => onApplyStatPoints({ [stat]: amount })}
+          onClose={() => setShowLevelUpModal(false)}
         />
       )}
     </div>

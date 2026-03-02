@@ -1,5 +1,8 @@
 import React from 'react';
-import { GeneratedItem, ItemAffix, StatKey } from '../engine/lootGenerator';
+import { GeneratedItem, ItemAffix, AffixStat } from '../engine/lootGenerator';
+
+// Re-export StatKey as alias for backward compat
+export type { AffixStat as StatKey };
 
 interface ItemTooltipProps {
   item: GeneratedItem;
@@ -20,17 +23,17 @@ const RARITY_BG: Record<string, string> = {
   Legendary: 'bg-yellow-950/30',
 };
 
-// Map all 9 valid stat keys to display labels and icons
-const STAT_DISPLAY: Record<StatKey, { label: string; icon: string; color: string }> = {
-  str:        { label: 'Strength',        icon: '💪', color: 'text-red-400' },
-  dex:        { label: 'Dexterity',       icon: '🏃', color: 'text-green-400' },
-  int:        { label: 'Intelligence',    icon: '🧠', color: 'text-blue-400' },
-  vit:        { label: 'Vitality',        icon: '❤️', color: 'text-pink-400' },
-  hp:         { label: 'HP',              icon: '💗', color: 'text-pink-300' },
-  physDmg:    { label: 'Physical Damage', icon: '⚔️', color: 'text-orange-400' },
-  magDmg:     { label: 'Magic Damage',    icon: '✨', color: 'text-purple-400' },
-  defense:    { label: 'Defense',         icon: '🛡️', color: 'text-cyan-400' },
-  critChance: { label: 'Critical Chance', icon: '🎯', color: 'text-yellow-400' },
+// Map all valid stat keys to display labels and icons
+const STAT_DISPLAY: Partial<Record<AffixStat, { label: string; icon: string; color: string }>> = {
+  str:            { label: 'Strength',        icon: '💪', color: 'text-red-400' },
+  dex:            { label: 'Dexterity',       icon: '🏃', color: 'text-green-400' },
+  int:            { label: 'Intelligence',    icon: '🧠', color: 'text-blue-400' },
+  vit:            { label: 'Vitality',        icon: '❤️', color: 'text-pink-400' },
+  hp:             { label: 'HP',              icon: '💗', color: 'text-pink-300' },
+  physicalDamage: { label: 'Physical Damage', icon: '⚔️', color: 'text-orange-400' },
+  magicDamage:    { label: 'Magic Damage',    icon: '✨', color: 'text-purple-400' },
+  defense:        { label: 'Defense',         icon: '🛡️', color: 'text-cyan-400' },
+  critChance:     { label: 'Critical Chance', icon: '🎯', color: 'text-yellow-400' },
 };
 
 function AffixLine({ affix }: { affix: ItemAffix }) {

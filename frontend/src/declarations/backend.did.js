@@ -28,9 +28,11 @@ export const Realm = IDL.Variant({
   'Hardcore' : IDL.Null,
   'Softcore' : IDL.Null,
 });
+export const CharacterId = IDL.Nat8;
 export const CharacterCreationError = IDL.Variant({
   'noPermission' : IDL.Null,
   'alreadyExists' : IDL.Null,
+  'limitReached' : IDL.Null,
 });
 export const UserProfile = IDL.Record({ 'username' : IDL.Text });
 export const CharacterStatus = IDL.Variant({
@@ -43,7 +45,9 @@ export const Character = IDL.Record({
   'int' : IDL.Nat,
   'str' : IDL.Nat,
   'vit' : IDL.Nat,
+  'maxHP' : IDL.Nat,
   'status' : CharacterStatus,
+  'currentHP' : IDL.Nat,
   'name' : IDL.Text,
   'season' : IDL.Nat,
   'level' : IDL.Nat,
@@ -82,6 +86,12 @@ export const MarketplaceListing = IDL.Record({
   'seller' : IDL.Principal,
   'price' : IDL.Nat,
 });
+export const SetHpError = IDL.Variant({
+  'noPermission' : IDL.Null,
+  'characterNotFound' : IDL.Null,
+  'maxHPExceeded' : IDL.Null,
+  'alreadyFullHP' : IDL.Null,
+});
 
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -115,12 +125,13 @@ export const idlService = IDL.Service({
   'buyItem' : IDL.Func([IDL.Text], [], []),
   'createCharacter' : IDL.Func(
       [IDL.Text, Realm],
-      [IDL.Variant({ 'ok' : IDL.Null, 'err' : CharacterCreationError })],
+      [IDL.Variant({ 'ok' : CharacterId, 'err' : CharacterCreationError })],
       [],
     ),
+  'deleteCharacter' : IDL.Func([CharacterId], [], []),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-  'getCharacter' : IDL.Func([], [IDL.Opt(Character)], ['query']),
+  'getCharacters' : IDL.Func([], [IDL.Vec(Character)], ['query']),
   'getItem' : IDL.Func([IDL.Text], [IDL.Opt(Item)], ['query']),
   'getItemImage' : IDL.Func([IDL.Text], [ExternalBlob], ['query']),
   'getMarketplaceListings' : IDL.Func(
@@ -136,7 +147,11 @@ export const idlService = IDL.Service({
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'listItemForSale' : IDL.Func([IDL.Text, IDL.Nat], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
-  'submitDungeonResult' : IDL.Func([IDL.Nat], [], []),
+  'setCharacterHp' : IDL.Func(
+      [CharacterId, IDL.Nat],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : SetHpError })],
+      [],
+    ),
   'uploadItemImage' : IDL.Func([IDL.Text, ExternalBlob], [], []),
 });
 
@@ -160,9 +175,11 @@ export const idlFactory = ({ IDL }) => {
     'guest' : IDL.Null,
   });
   const Realm = IDL.Variant({ 'Hardcore' : IDL.Null, 'Softcore' : IDL.Null });
+  const CharacterId = IDL.Nat8;
   const CharacterCreationError = IDL.Variant({
     'noPermission' : IDL.Null,
     'alreadyExists' : IDL.Null,
+    'limitReached' : IDL.Null,
   });
   const UserProfile = IDL.Record({ 'username' : IDL.Text });
   const CharacterStatus = IDL.Variant({
@@ -175,7 +192,9 @@ export const idlFactory = ({ IDL }) => {
     'int' : IDL.Nat,
     'str' : IDL.Nat,
     'vit' : IDL.Nat,
+    'maxHP' : IDL.Nat,
     'status' : CharacterStatus,
+    'currentHP' : IDL.Nat,
     'name' : IDL.Text,
     'season' : IDL.Nat,
     'level' : IDL.Nat,
@@ -214,6 +233,12 @@ export const idlFactory = ({ IDL }) => {
     'seller' : IDL.Principal,
     'price' : IDL.Nat,
   });
+  const SetHpError = IDL.Variant({
+    'noPermission' : IDL.Null,
+    'characterNotFound' : IDL.Null,
+    'maxHPExceeded' : IDL.Null,
+    'alreadyFullHP' : IDL.Null,
+  });
   
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -247,12 +272,13 @@ export const idlFactory = ({ IDL }) => {
     'buyItem' : IDL.Func([IDL.Text], [], []),
     'createCharacter' : IDL.Func(
         [IDL.Text, Realm],
-        [IDL.Variant({ 'ok' : IDL.Null, 'err' : CharacterCreationError })],
+        [IDL.Variant({ 'ok' : CharacterId, 'err' : CharacterCreationError })],
         [],
       ),
+    'deleteCharacter' : IDL.Func([CharacterId], [], []),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-    'getCharacter' : IDL.Func([], [IDL.Opt(Character)], ['query']),
+    'getCharacters' : IDL.Func([], [IDL.Vec(Character)], ['query']),
     'getItem' : IDL.Func([IDL.Text], [IDL.Opt(Item)], ['query']),
     'getItemImage' : IDL.Func([IDL.Text], [ExternalBlob], ['query']),
     'getMarketplaceListings' : IDL.Func(
@@ -268,7 +294,11 @@ export const idlFactory = ({ IDL }) => {
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'listItemForSale' : IDL.Func([IDL.Text, IDL.Nat], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
-    'submitDungeonResult' : IDL.Func([IDL.Nat], [], []),
+    'setCharacterHp' : IDL.Func(
+        [CharacterId, IDL.Nat],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : SetHpError })],
+        [],
+      ),
     'uploadItemImage' : IDL.Func([IDL.Text, ExternalBlob], [], []),
   });
 };

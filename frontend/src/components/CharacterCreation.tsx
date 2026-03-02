@@ -1,17 +1,24 @@
 import React, { useState } from 'react';
 import { Realm } from '../backend';
-import { useCreateCharacter, CreateCharacterParams, CharacterAlreadyExistsError } from '../hooks/useQueries';
-import { LocalStats } from '../hooks/useLocalCharacter';
+import { useCreateCharacter, CharacterAlreadyExistsError, CharacterLimitReachedError } from '../hooks/useQueries';
+import { generateStarterEquipment } from '../engine/lootGenerator';
+import { saveStarterEquipmentForCharacter } from '../hooks/useLocalCharacter';
+
+interface LocalStats {
+  str: number;
+  dex: number;
+  int: number;
+  vit: number;
+}
 
 interface CharacterCreationProps {
-  onComplete: (name: string, realm: Realm, allocatedStats: LocalStats) => void;
-  /** Called when the backend reports the character already exists — skip to game */
+  onCharacterCreated: () => void;
   onAlreadyExists?: () => void;
 }
 
 const TOTAL_STAT_POINTS = 8;
 
-export default function CharacterCreation({ onComplete, onAlreadyExists }: CharacterCreationProps) {
+export default function CharacterCreation({ onCharacterCreated, onAlreadyExists }: CharacterCreationProps) {
   const [name, setName] = useState('');
   const [realm, setRealm] = useState<Realm>(Realm.Softcore);
   const [stats, setStats] = useState<LocalStats>({ str: 1, dex: 1, int: 1, vit: 1 });
@@ -19,7 +26,7 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
 
   const createCharacterMutation = useCreateCharacter();
 
-  const basePoints = 4; // 1 per stat minimum
+  const basePoints = 4;
   const spentPoints = stats.str + stats.dex + stats.int + stats.vit - basePoints;
   const remainingPoints = TOTAL_STAT_POINTS - spentPoints;
 
@@ -47,21 +54,23 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
     }
 
     try {
-      await createCharacterMutation.mutateAsync({
+      const characterId = await createCharacterMutation.mutateAsync({
         name: name.trim(),
         realm,
-        str: stats.str,
-        dex: stats.dex,
-        int: stats.int,
-        vit: stats.vit,
       });
 
-      // Success: initialize local character with allocated stats
-      onComplete(name.trim(), realm, stats);
+      // Generate and persist starter equipment for the new character
+      const { weapon, armor } = generateStarterEquipment();
+      saveStarterEquipmentForCharacter(characterId, [weapon, armor]);
+
+      onCharacterCreated();
     } catch (err: unknown) {
-      // If the character already exists on the backend, silently redirect
       if (err instanceof CharacterAlreadyExistsError) {
         onAlreadyExists?.();
+        return;
+      }
+      if (err instanceof CharacterLimitReachedError) {
+        setError('Maximum 8 characters reached. Delete a character to create a new one.');
         return;
       }
       const msg = err instanceof Error ? err.message : 'Failed to create character.';
@@ -91,28 +100,28 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
   };
 
   const isLoading = createCharacterMutation.isPending;
+  const statKeys = Object.keys(stats) as (keyof LocalStats)[];
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        {/* Header */}
         <div className="text-center mb-8">
           <img
             src="/assets/generated/logo-sigil.dim_256x256.png"
             alt="Sigil"
             className="w-20 h-20 mx-auto mb-4 opacity-90"
           />
-          <h1 className="text-3xl font-bold text-primary tracking-widest uppercase">
+          <h1 className="text-3xl font-bold text-primary tracking-widest uppercase font-display">
             Create Your Hero
           </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
+          <p className="text-muted mt-2 text-sm">
             Forge your legend in the depths below.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Character Name */}
-          <div className="bg-card border border-border rounded-lg p-5">
+          <div className="bg-surface-1 border border-border rounded-lg p-5">
             <label className="block text-sm font-semibold text-foreground mb-2 uppercase tracking-wider">
               Character Name
             </label>
@@ -123,12 +132,12 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
               placeholder="Enter your hero's name..."
               maxLength={20}
               disabled={isLoading}
-              className="w-full bg-background border border-border rounded px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50"
+              className="w-full bg-surface-2 border border-border rounded px-3 py-2 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50"
             />
           </div>
 
           {/* Realm Selection */}
-          <div className="bg-card border border-border rounded-lg p-5">
+          <div className="bg-surface-1 border border-border rounded-lg p-5">
             <label className="block text-sm font-semibold text-foreground mb-3 uppercase tracking-wider">
               Choose Realm
             </label>
@@ -155,7 +164,7 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
                   className={`p-4 rounded-lg border-2 text-left transition-all disabled:opacity-50 ${
                     realm === r.value
                       ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                      : 'border-border bg-surface-2 text-muted hover:border-primary/50'
                   }`}
                 >
                   <div className="text-2xl mb-1">{r.icon}</div>
@@ -167,7 +176,7 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
           </div>
 
           {/* Stat Allocation */}
-          <div className="bg-card border border-border rounded-lg p-5">
+          <div className="bg-surface-1 border border-border rounded-lg p-5">
             <div className="flex items-center justify-between mb-4">
               <label className="text-sm font-semibold text-foreground uppercase tracking-wider">
                 Allocate Stats
@@ -176,7 +185,7 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
                 className={`text-sm font-bold px-3 py-1 rounded-full ${
                   remainingPoints > 0
                     ? 'bg-primary/20 text-primary'
-                    : 'bg-muted text-muted-foreground'
+                    : 'bg-surface-2 text-muted'
                 }`}
               >
                 {remainingPoints} points remaining
@@ -184,19 +193,19 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
             </div>
 
             <div className="space-y-3">
-              {(Object.keys(stats) as (keyof LocalStats)[]).map((stat) => (
-                <div key={stat} className="flex items-center gap-3">
+              {statKeys.map((stat) => (
+                <div key={String(stat)} className="flex items-center gap-3">
                   <span className="text-xl w-8 text-center">{statIcons[stat]}</span>
                   <div className="flex-1">
                     <div className="text-sm font-medium text-foreground">{statLabels[stat]}</div>
-                    <div className="text-xs text-muted-foreground">{statDescriptions[stat]}</div>
+                    <div className="text-xs text-muted">{statDescriptions[stat]}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => decrementStat(stat)}
                       disabled={stats[stat] <= 1 || isLoading}
-                      className="w-7 h-7 rounded border border-border bg-background text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-sm font-bold"
+                      className="w-7 h-7 rounded border border-border bg-surface-2 text-foreground hover:bg-surface-1 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-sm font-bold"
                     >
                       −
                     </button>
@@ -207,7 +216,7 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
                       type="button"
                       onClick={() => incrementStat(stat)}
                       disabled={remainingPoints <= 0 || isLoading}
-                      className="w-7 h-7 rounded border border-border bg-background text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-sm font-bold"
+                      className="w-7 h-7 rounded border border-border bg-surface-2 text-foreground hover:bg-surface-1 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-sm font-bold"
                     >
                       +
                     </button>
@@ -223,14 +232,21 @@ export default function CharacterCreation({ onComplete, onAlreadyExists }: Chara
             )}
           </div>
 
-          {/* Error */}
+          {/* Starter Equipment Notice */}
+          <div className="bg-surface-1 border border-border/50 rounded-lg p-3 flex items-start gap-2">
+            <span className="text-yellow-500 text-sm mt-0.5">⚔</span>
+            <p className="text-xs text-muted">
+              Your hero will start with a <span className="text-foreground font-medium">Worn Sword</span> and{' '}
+              <span className="text-foreground font-medium">Worn Chestplate</span> to survive the early dungeons.
+            </p>
+          </div>
+
           {error && (
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-destructive text-sm text-center">
               {error}
             </div>
           )}
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={isLoading || remainingPoints > 0 || !name.trim()}

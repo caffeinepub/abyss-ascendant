@@ -1,43 +1,52 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Fix post-login routing: skip character creation when character already exists",
+  "title": "Add Starting Equipment for New Characters & Clean Up Drop Rate UI",
   "requirements": [
     {
-      "id": "REQ-29",
-      "summary": "After login and realm selection, query backend for existing character and skip CharacterCreationScreen if character exists, routing directly to character sheet/dungeon select screen",
+      "id": "REQ-47",
+      "summary": "Automatically grant newly created characters a starter equipment set (weapon and armor) generated at item level 1 with Common rarity using existing lootGenerator logic, ensuring meaningful combat stats against level 1 monsters",
       "acceptanceCriteria": [
-        "After login, if a character exists for the selected realm, the CharacterCreationScreen is never rendered and the player lands on the character sheet or dungeon select screen.",
-        "After login, if no character exists for the selected realm, the CharacterCreationScreen is shown as normal.",
-        "This behavior applies to both Softcore and Hardcore realm selections.",
-        "No 'Actor Not Available' or unhandled error is shown when a character already exists."
+        "A newly created character has a weapon equipped in their weapon slot from the moment the character sheet is first shown.",
+        "A newly created character has an armor piece equipped in their armor slot from the moment the character sheet is first shown.",
+        "The starter weapon provides sufficient base physical damage so that level 1 combat results in more than 1 damage per hit against a level 1 monster.",
+        "The starter armor provides sufficient base defense so that level 1 monster attacks deal noticeably less than 13 damage to the player.",
+        "Starter items are generated at item level 1 with Common rarity via the existing lootGenerator logic.",
+        "The starter items appear in the character's equipped slots (not just inventory) immediately after character creation."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/App.tsx",
+          "path": "frontend/src/engine/lootGenerator.ts",
           "operation": "modify",
-          "description": "Add logic immediately after realm selection to query the backend for an existing character using the getCharacter() method. If a character exists for the selected realm in the current season, set the screen state to skip CharacterCreationScreen and route directly to the character sheet or dungeon select screen. Only show CharacterCreationScreen when getCharacter() returns null for the selected realm. Ensure this check happens before any screen rendering decisions and handle the query loading state appropriately to prevent flickering."
+          "description": "Export a new function `generateStarterEquipment()` that creates a starter weapon (Weapon type, Common rarity, item level 1) and starter armor (Armor type, Common rarity, item level 1) using the existing `generateItem` logic. Ensure the generated weapon provides sufficient base physical damage stats and the armor provides sufficient defense stats to satisfy the acceptance criteria for level 1 combat. The function should return an object containing both the weapon and armor GeneratedItem objects."
+        },
+        {
+          "path": "frontend/src/components/CharacterCreation.tsx",
+          "operation": "modify",
+          "description": "After a character is successfully created via the mutation hook, immediately call `generateStarterEquipment()` from lootGenerator to create starter weapon and armor items. Add these items to the character's equipped slots (weapon and armor) in the local character state before navigation or rendering. Ensure the equipped items are persisted to localStorage via the useLocalCharacter hook so they appear immediately when the character sheet loads for the first time."
+        },
+        {
+          "path": "frontend/src/hooks/useLocalCharacter.ts",
+          "operation": "modify",
+          "description": "Ensure the LocalCharacter state shape and initialization logic correctly handle equipped items (weapon, armor, trinket slots) in the equipped object. When a character is first loaded from the backend but has no local data in localStorage, initialize the equipped slots as empty objects. When CharacterCreation adds starter equipment to equipped slots, ensure those are properly serialized to localStorage and merged with backend character data on subsequent loads."
         }
       ]
     },
     {
-      "id": "REQ-31",
-      "summary": "Handle #alreadyExists error from createCharacter by silently redirecting to character sheet/dungeon select screen instead of showing error",
+      "id": "REQ-48",
+      "summary": "Remove the non-functional drop rate slider UI from DungeonSelectScreen and replace it with a clean static display showing the calculated XP rate and drop rate based on the selected monster level using the existing 6% base drop rate logic",
       "acceptanceCriteria": [
-        "If createCharacter returns #alreadyExists, no error toast or error screen is shown.",
-        "The player is automatically routed to the character sheet or dungeon select screen.",
-        "The app does not crash or enter an unrecoverable state."
+        "The drop rate scroller/slider is completely removed from DungeonSelectScreen.tsx.",
+        "A static text display shows the current calculated drop rate based on the chosen monster level and player level.",
+        "The displayed drop rate reflects the flat 6% base minus 1% per level the monster is below the player (e.g., same level = 6%, 3 levels below = 3%, 6+ levels below = 0%).",
+        "XP rate information is also displayed statically alongside the drop rate.",
+        "No interactive input element exists for modifying the drop rate — it is purely informational."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/App.tsx",
+          "path": "frontend/src/components/DungeonSelectScreen.tsx",
           "operation": "modify",
-          "description": "Update the character creation success/error handling in App.tsx to detect when createCharacter returns a Result with err variant of type CharacterCreationError.alreadyExists. When this specific error is detected, silently redirect the player to the character sheet or dungeon select screen without displaying any error message or toast. Ensure the app gracefully handles this race condition scenario and does not crash or show confusing error states."
-        },
-        {
-          "path": "frontend/src/hooks/useQueries.ts",
-          "operation": "modify",
-          "description": "Update the useCreateCharacter mutation hook to properly type and expose the CharacterCreationError variants (including alreadyExists) from the backend Result type, allowing App.tsx to distinguish between different error cases. Ensure the mutation result properly surfaces the error variant so the calling code can handle #alreadyExists differently from other errors."
+          "description": "Remove any drop rate slider/scroller UI element (likely a Range input or similar interactive control). Replace it with a static read-only text display that calculates and shows the effective drop rate using the formula: `Math.max(0, 6 - Math.max(0, character.level - selectedMonsterLevel))` percent. Also display the XP rate information statically. Use a clean informational display style matching the prior version of the screen (text-based, no interactive elements). Ensure both XP rate and drop rate are clearly labeled and formatted as percentages."
         }
       ]
     }

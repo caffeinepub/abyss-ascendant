@@ -16,7 +16,9 @@ export interface Character {
   'int' : bigint,
   'str' : bigint,
   'vit' : bigint,
+  'maxHP' : bigint,
   'status' : CharacterStatus,
+  'currentHP' : bigint,
   'name' : string,
   'season' : bigint,
   'level' : bigint,
@@ -24,7 +26,9 @@ export interface Character {
   'realm' : Realm,
 }
 export type CharacterCreationError = { 'noPermission' : null } |
-  { 'alreadyExists' : null };
+  { 'alreadyExists' : null } |
+  { 'limitReached' : null };
+export type CharacterId = number;
 export type CharacterStatus = { 'Dead' : null } |
   { 'Alive' : null };
 export type ExternalBlob = Uint8Array;
@@ -57,6 +61,10 @@ export type Rarity = { 'Rare' : null } |
   { 'Common' : null };
 export type Realm = { 'Hardcore' : null } |
   { 'Softcore' : null };
+export type SetHpError = { 'noPermission' : null } |
+  { 'characterNotFound' : null } |
+  { 'maxHPExceeded' : null } |
+  { 'alreadyFullHP' : null };
 export interface UserProfile { 'username' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -93,12 +101,13 @@ export interface _SERVICE {
   'buyItem' : ActorMethod<[string], undefined>,
   'createCharacter' : ActorMethod<
     [string, Realm],
-    { 'ok' : null } |
+    { 'ok' : CharacterId } |
       { 'err' : CharacterCreationError }
   >,
+  'deleteCharacter' : ActorMethod<[CharacterId], undefined>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
-  'getCharacter' : ActorMethod<[], [] | [Character]>,
+  'getCharacters' : ActorMethod<[], Array<Character>>,
   'getItem' : ActorMethod<[string], [] | [Item]>,
   'getItemImage' : ActorMethod<[string], ExternalBlob>,
   'getMarketplaceListings' : ActorMethod<[], Array<MarketplaceListing>>,
@@ -106,7 +115,11 @@ export interface _SERVICE {
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'listItemForSale' : ActorMethod<[string, bigint], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
-  'submitDungeonResult' : ActorMethod<[bigint], undefined>,
+  'setCharacterHp' : ActorMethod<
+    [CharacterId, bigint],
+    { 'ok' : null } |
+      { 'err' : SetHpError }
+  >,
   'uploadItemImage' : ActorMethod<[string, ExternalBlob], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;

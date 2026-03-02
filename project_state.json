@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 11,
+  "projectStateVersion": 19,
   "summary": "Full-stack browser-based real-time hack-and-slash RPG inspired by Ladder Slasher's gameplay loop. Built with React + TypeScript frontend and Motoko backend on ICP. Features Internet Identity auth, shared persistent on-chain world, ICP-based marketplace, live leaderboard, seasonal resets, hardcore/softcore realms, tick-based combat, class progression with Ascension Trials, and full itemization system.",
   "architectural_notes": [
     "Frontend: React + TypeScript with Canvas rendering for dungeon/combat screens",
@@ -10,13 +10,15 @@
     "Modular structure: state/, systems/, ui/, data/ directories for clean separation",
     "Deterministic RNG with seed option for debugging and server-side validation",
     "Season reset triggers automatically when first player completes final class Ascension Trial",
-    "Players retain stash/equipment across season resets; class unlock chain resets to Tier 1"
+    "Players retain stash/equipment across season resets; class unlock chain resets to Tier 1",
+    "Combat ability cycling: per-tick proc roll determines attack vs ability use; ability fully replaces normal attack when triggered",
+    "Health is persistent and live: damage carries over between fights; regenerates at +2 HP/sec outside combat; stored on-chain so it survives page refreshes (planned but deferred)"
   ],
   "known_issues": [
     "Real-time WebSocket co-op (live players in same dungeon) is not supported on ICP platform; multiplayer is shared-world async only",
     "Equipment stats (weapon base damage, armor base defense, affixes) not applied to character effective stats in combat or character sheet"
   ],
-  "isFixRequest": true,
+  "isFixRequest": false,
   "existing_features": [
     {
       "id": "feature-implement-internet-identity-authentication-users-must-log-in-before-creating-or-accessing-characters-all-on-chain-state-characters-inventory-marketplace-listings-must-be-scoped-to-the-authenticated-principal",
@@ -217,6 +219,118 @@
         "REQ-31"
       ],
       "version": 1
+    },
+    {
+      "id": "feature-in-combatengine-ts-implement-ability-cycling-on-each-attack-tick-when-a-character-has-1-equipped-ability-roll-87-5-normal-attack-12-5-ability-with-2-equipped-abilities-roll-75-normal-attack-12-5-each-ability-with-3-equipped-abilities-roll-62-5-normal-attack-12-5-each-ability-when-an-ability-procs-it-fully-replaces-the-normal-attack-with-that-ability-s-defined-effect-damage-multiplier-type-aoe-status-etc-from-abilities-ts-the-normal-attack-only-fires-when-no-ability-is-selected-by-the-roll",
+      "title": "In combatEngine.ts, implement ability cycling on each attack tick. When a character has 1 equipped ability, roll 87.5% normal attack / 12.5% ability. With 2 equipped abilities, roll 75% normal attack / 12.5% each ability. With 3 equipped abilities, roll 62.5% normal attack / 12.5% each ability. When an ability procs, it fully replaces the normal attack with that ability's defined effect (damage multiplier, type, AoE, status, etc.) from abilities.ts. The normal attack only fires when no ability is selected by the roll.",
+      "reqIds": [
+        "REQ-32"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-combatengine-ts-set-the-player-s-base-ticks-between-attacks-to-12-set-level-1-enemy-ticks-between-attacks-to-12-scale-enemy-ticks-between-attacks-down-linearly-so-that-a-level-100-enemy-attacks-every-2-ticks-use-the-formula-enemyticks-round-12-10-99-level-1-clamped-to-a-minimum-of-2-expose-both-the-player-tick-rate-and-each-monster-s-tick-rate-as-visible-constants-derivations-so-future-gear-based-reductions-can-be-applied-as-modifiers-update-charactersheet-tsx-and-dungeonrunscreen-tsx-to-reflect-the-new-base-values",
+      "title": "In combatEngine.ts, set the player's base ticks-between-attacks to 12. Set level 1 enemy ticks-between-attacks to 12. Scale enemy ticks-between-attacks down linearly so that a level 100 enemy attacks every 2 ticks. Use the formula: enemyTicks = round(12 - (10 / 99) * (level - 1)), clamped to a minimum of 2. Expose both the player tick rate and each monster's tick rate as visible constants/derivations so future gear-based reductions can be applied as modifiers. Update CharacterSheet.tsx and DungeonRunScreen.tsx to reflect the new base values.",
+      "reqIds": [
+        "REQ-33"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-lootgenerator-ts-scale-down-the-average-value-of-all-randomly-generated-item-stat-affixes-by-75-across-all-item-types-weapon-armor-trinket-charm-and-all-rarity-tiers-this-applies-to-base-stat-values-physical-damage-on-weapons-defense-on-armor-and-all-affix-rolls-strength-dexterity-intelligence-vitality-hp-physical-damage-magic-damage-defense-critical-chance-reduce-the-midpoint-average-of-each-random-range-by-75-while-preserving-the-relative-spread-between-min-and-max",
+      "title": "In lootGenerator.ts, scale down the average value of all randomly generated item stat affixes by 75% across all item types (Weapon, Armor, Trinket/Charm) and all rarity tiers. This applies to base stat values (physical damage on weapons, defense on armor) and all affix rolls (Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance). Reduce the midpoint/average of each random range by 75% while preserving the relative spread between min and max.",
+      "reqIds": [
+        "REQ-34"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-replace-dungeonselectscreen-tsx-s-catacombs-and-depths-mode-selector-with-a-level-input-combat-screen-the-player-enters-a-monster-level-between-1-and-their-current-character-level-inclusive-the-monster-is-scaled-to-that-level-hp-damage-defense-tick-interval-loot-quality-xp-reward-all-scale-proportionally-the-ascension-trial-remains-accessible-from-this-screen-as-a-distinct-button-or-section-separate-from-the-level-input-flow-remove-the-catacombs-and-depths-mode-logic-from-the-dungeon-entry-path-ascension-trial-mode-logic-is-preserved",
+      "title": "Replace DungeonSelectScreen.tsx's Catacombs and Depths mode selector with a level-input combat screen. The player enters a monster level between 1 and their current character level (inclusive). The monster is scaled to that level (HP, damage, defense, tick interval, loot quality, XP reward all scale proportionally). The Ascension Trial remains accessible from this screen as a distinct button or section, separate from the level-input flow. Remove the Catacombs and Depths mode logic from the dungeon entry path; Ascension Trial mode logic is preserved.",
+      "reqIds": [
+        "REQ-35"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-combatengine-ts-and-or-lootgenerator-ts-implement-an-xp-and-drop-rate-penalty-when-the-monster-level-chosen-by-the-player-is-more-than-5-levels-below-the-player-s-current-character-level-when-this-condition-is-met-playerlevel-monsterlevel-5-apply-a-50-reduction-to-xp-earned-and-a-50-reduction-to-the-item-drop-rate-for-that-run-log-or-annotate-the-penalty-in-the-combat-result-so-the-frontend-can-display-it-to-the-player",
+      "title": "In combatEngine.ts and/or lootGenerator.ts, implement an XP and drop rate penalty when the monster level chosen by the player is more than 5 levels below the player's current character level. When this condition is met (playerLevel - monsterLevel > 5), apply a 50% reduction to XP earned and a 50% reduction to the item drop rate for that run. Log or annotate the penalty in the combat result so the frontend can display it to the player.",
+      "reqIds": [
+        "REQ-36"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-dungeonselectscreen-tsx-and-combatengine-ts-enforce-a-maximum-fightable-monster-level-of-the-player-s-current-character-level-5-if-the-player-types-a-value-higher-than-character-level-5-in-the-monster-level-input-field-display-an-inline-error-message-stating-the-level-is-not-possible-e-g-maximum-monster-level-is-playerlevel-5-prevent-starting-a-dungeon-run-while-an-out-of-range-value-is-entered-the-lower-bound-remains-1",
+      "title": "In DungeonSelectScreen.tsx and combatEngine.ts, enforce a maximum fightable monster level of the player's current character level + 5. If the player types a value higher than (character level + 5) in the monster level input field, display an inline error message stating the level is not possible (e.g. 'Maximum monster level is [playerLevel + 5]'). Prevent starting a dungeon run while an out-of-range value is entered. The lower bound remains 1.",
+      "reqIds": [
+        "REQ-38"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-uselocalcharacter-ts-and-or-a-new-usehealthsync-hook-after-every-dungeon-run-completes-persist-the-character-s-post-combat-hp-to-the-backend-via-setcharacterhp-on-app-load-read-currenthp-from-the-backend-character-record-and-initialize-local-hp-state-to-that-value-rather-than-maxhp-this-ensures-damage-taken-in-a-previous-session-carries-into-the-next-session",
+      "title": "In useLocalCharacter.ts and/or a new useHealthSync hook, after every dungeon run completes persist the character's post-combat HP to the backend via setCharacterHp. On app load, read currentHp from the backend character record and initialize local HP state to that value rather than maxHp. This ensures damage taken in a previous session carries into the next session.",
+      "reqIds": [
+        "REQ-40"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-combatengine-ts-accept-the-character-s-current-hp-as-input-to-the-combat-simulation-rather-than-always-computing-hp-from-base-stats-alone-the-player-enters-each-fight-with-their-actual-current-hp-if-currenthp-maxhp-at-fight-start-the-combat-engine-uses-the-lower-value-as-the-starting-hp-on-fight-completion-the-remaining-hp-is-returned-in-the-combat-result-for-persistence",
+      "title": "In combatEngine.ts, accept the character's current HP as input to the combat simulation rather than always computing HP from base stats alone. The player enters each fight with their actual current HP. If currentHp < maxHp at fight start, the combat engine uses the lower value as the starting HP. On fight completion, the remaining HP is returned in the combat result for persistence.",
+      "reqIds": [
+        "REQ-41"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-persistent-live-health-bar-component-displayed-at-the-top-of-every-screen-inside-navigation-tsx-or-as-a-sibling-element-rendered-from-app-tsx-it-must-show-current-hp-max-hp-numerically-and-as-a-visual-bar-the-bar-must-update-in-real-time-during-the-2-hp-sec-regen-animation-and-after-combat",
+      "title": "Add a persistent live health bar component displayed at the top of every screen (inside Navigation.tsx or as a sibling element rendered from App.tsx). It must show current HP / max HP numerically and as a visual bar. The bar must update in real time during the +2 HP/sec regen animation and after combat.",
+      "reqIds": [
+        "REQ-42"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-outside-of-active-combat-regenerate-the-player-s-current-hp-at-2-hp-per-second-up-to-maxhp-implement-this-as-a-client-side-interval-in-app-tsx-or-uselocalcharacter-ts-the-regen-timer-must-produce-a-visible-tick-up-effect-on-the-health-bar-every-second-when-hp-reaches-maxhp-the-regen-interval-pauses-regen-does-not-run-during-an-active-dungeon-run-after-each-regen-tick-persist-the-updated-hp-to-the-backend-via-setcharacterhp-so-regen-progress-survives-a-page-reload",
+      "title": "Outside of active combat, regenerate the player's current HP at +2 HP per second up to maxHp. Implement this as a client-side interval in App.tsx or useLocalCharacter.ts. The regen timer must produce a visible tick-up effect on the health bar every second. When HP reaches maxHp, the regen interval pauses. Regen does not run during an active dungeon run. After each regen tick, persist the updated HP to the backend via setCharacterHp so regen progress survives a page reload.",
+      "reqIds": [
+        "REQ-43"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-replace-the-current-realm-select-single-character-flow-in-app-tsx-with-a-character-select-screen-shown-immediately-after-login-the-character-select-screen-must-list-all-of-the-player-s-existing-characters-showing-name-realm-class-tier-level-and-alive-dead-status-it-must-include-a-create-new-character-button-disabled-with-a-tooltip-when-the-player-already-has-8-characters-and-a-delete-button-per-character-slot-with-a-confirmation-prompt-before-deletion-selecting-a-character-routes-the-player-to-the-character-sheet-dungeon-select-screen-for-that-character",
+      "title": "Replace the current realm-select / single-character flow in App.tsx with a character select screen shown immediately after login. The character select screen must list all of the player's existing characters (showing name, realm, class tier, level, and alive/dead status). It must include a 'Create New Character' button (disabled with a tooltip when the player already has 8 characters) and a 'Delete' button per character slot (with a confirmation prompt before deletion). Selecting a character routes the player to the character sheet / dungeon select screen for that character.",
+      "reqIds": [
+        "REQ-45"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-all-frontend-queries-and-mutations-in-usequeries-ts-to-support-multi-character-operations-fetching-all-characters-for-the-current-principal-creating-a-character-with-limitreached-error-handling-and-deleting-a-character-by-id-the-active-character-id-must-be-tracked-in-app-tsx-state-so-all-screens-reference-the-correct-character-when-multiple-exist",
+      "title": "Update all frontend queries and mutations in useQueries.ts to support multi-character operations: fetching all characters for the current principal, creating a character (with #limitReached error handling), and deleting a character by ID. The active character ID must be tracked in App.tsx state so all screens reference the correct character when multiple exist.",
+      "reqIds": [
+        "REQ-46"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-when-a-new-character-is-created-automatically-grant-them-a-starter-equipment-set-consisting-of-at-minimum-one-weapon-and-one-armor-piece-the-starter-weapon-must-provide-enough-base-physical-damage-so-that-the-character-deals-meaningful-damage-to-level-1-monsters-well-above-1-damage-the-starter-armor-must-provide-enough-base-defense-to-meaningfully-reduce-incoming-damage-from-level-1-monsters-which-currently-deal-13-damage-generate-these-items-using-the-existing-lootgenerator-ts-item-generation-logic-at-item-level-1-with-common-rarity-then-immediately-equip-them-to-the-character-s-weapon-and-armor-slots-this-must-happen-at-character-creation-time-so-the-player-never-starts-a-dungeon-run-unequipped",
+      "title": "When a new character is created, automatically grant them a starter equipment set consisting of at minimum one Weapon and one Armor piece. The starter weapon must provide enough base physical damage so that the character deals meaningful damage to level 1 monsters (well above 1 damage). The starter armor must provide enough base defense to meaningfully reduce incoming damage from level 1 monsters (which currently deal ~13 damage). Generate these items using the existing lootGenerator.ts item generation logic at item level 1 with Common rarity, then immediately equip them to the character's weapon and armor slots. This must happen at character creation time so the player never starts a dungeon run unequipped.",
+      "reqIds": [
+        "REQ-47"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-dungeonselectscreen-tsx-remove-the-non-functional-drop-rate-percentage-scroller-slider-ui-element-replace-it-with-a-clean-static-informational-display-showing-the-current-effective-xp-rate-and-drop-rate-for-the-selected-monster-level-calculated-using-the-existing-flat-6-base-drop-rate-logic-6-base-reduced-by-1-per-level-the-monster-is-below-the-player-s-level-flooring-at-0-the-display-should-be-read-only-text-matching-the-cleaner-informational-style-used-in-prior-versions-of-the-screen",
+      "title": "In DungeonSelectScreen.tsx, remove the non-functional drop rate percentage scroller/slider UI element. Replace it with a clean static informational display showing the current effective XP rate and drop rate for the selected monster level, calculated using the existing flat 6% base drop rate logic (6% base, reduced by 1% per level the monster is below the player's level, flooring at 0%). The display should be read-only text, matching the cleaner informational style used in prior versions of the screen.",
+      "reqIds": [
+        "REQ-48"
+      ],
+      "version": 1
     }
   ],
   "new_feature_requests": [
@@ -355,19 +469,89 @@
       "status": "pending"
     },
     {
-      "id": "AR-27",
-      "summary": "Implement an XP and drop rate penalty when the player fights a monster whose level is more than 5 levels below the player's current character level. When this condition is met, apply a 50% reduction to XP earned and a 50% reduction to the item drop rate for that run. This penalty must be calculated and applied in combatEngine.ts and/or lootGenerator.ts before results are submitted to the backend.",
-      "reqIds": [
-        "REQ-28"
-      ],
-      "status": "pending"
-    },
-    {
       "id": "AR-29",
       "summary": "In the backend (main.mo), ensure the createCharacter function returns a clear #alreadyExists error variant when a character already exists for the calling principal in the selected realm and current season. The frontend must never receive an ambiguous error for this case.",
       "reqIds": [
         "REQ-30"
       ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-30",
+      "summary": "Ability cycling in combat: each attack tick rolls a proc — 87.5% normal attack / 12.5% ability with 1 equipped, 75% / 12.5% each with 2, 62.5% / 12.5% each with 3. When ability procs, it fully replaces the normal attack with that ability's defined effect.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-31",
+      "summary": "Tick scaling: player base 12 ticks between attacks; level 1 enemies 12 ticks; level 100 enemies 2 ticks; smooth linear interpolation across levels 1-100. Leave headroom for future gear-based reductions.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-32",
+      "summary": "Scale down random loot stat averages by 75% across all generated items in lootGenerator.ts.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-34",
+      "summary": "Drop rate rework: flat 6% base drop rate, -1% per level the monster is below player's level, hitting 0% at 6+ levels below. Replaces the old 50% penalty system.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-35",
+      "summary": "Monster level cap: max fightable level = player's current level + 5. Typing a higher value shows an error message saying it isn't possible.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-36",
+      "summary": "In lootGenerator.ts, replace the existing XP/drop rate penalty system entirely with a new flat drop rate system: base drop rate is 6%. For each level the monster is below the player's current character level, reduce the drop rate by 1% (so a monster 1 level below = 5%, 2 below = 4%, ... 6 or more below = 0%). Remove the old logic that applied a 50% drop rate cut for monsters 5+ levels below the player. This new system applies to all dungeon modes and all monster types.",
+      "reqIds": [
+        "REQ-37"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-37",
+      "summary": "Persistent live health bar: displayed at top of every screen, damage carries over between fights, +2 HP/sec regen outside combat with visible animation, HP stored on-chain to survive page refreshes",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-38",
+      "summary": "Multi-character system: up to 8 characters per account (any mix of Softcore/Hardcore), character select screen after login, create character button (capped at 8), delete character option",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-39",
+      "summary": "In backend/main.mo, add a currentHp field to the character record. Persist the character's current HP on-chain so it survives page refreshes and browser closes. Expose a setCharacterHp(characterId, hp: Nat) update function callable by the authenticated principal (owner only). The currentHp value is initialized to the character's maximum HP on creation and must never exceed maxHp.",
+      "reqIds": [
+        "REQ-39"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-44",
+      "summary": "In backend/main.mo, remove the one-character-per-realm constraint. Replace the per-principal character storage with a structure that allows up to 8 characters per principal across any mix of Softcore and Hardcore realms. Expose a deleteCharacter(characterId) update function callable only by the owning principal. Enforce the 8-character cap in createCharacter — return a #limitReached error variant if the caller already has 8 characters.",
+      "reqIds": [
+        "REQ-44"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-45",
+      "summary": "New characters receive starter equipment on creation (basic weapon + armor) to make early combat viable — fixes 1 damage output and low survivability at level 1",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-46",
+      "summary": "Remove drop % scroller from dungeon select screen; replace with static display of XP/drop rate info (flat 6% base, reduced by level gap)",
+      "reqIds": [],
       "status": "pending"
     }
   ],

@@ -23,12 +23,15 @@ export default function InventoryScreen({
   const [activeTab, setActiveTab] = useState<Tab>('inventory');
   const [selectedItem, setSelectedItem] = useState<GeneratedItem | null>(null);
 
-  const currentItems =
+  // equippedItems is a GeneratedItem[] in the updated LocalCharacter
+  const equippedItemsArray: GeneratedItem[] = character.equippedItems ?? [];
+
+  const currentItems: GeneratedItem[] =
     activeTab === 'inventory'
       ? character.inventory
       : activeTab === 'stash'
       ? character.stash
-      : character.equippedItems;
+      : equippedItemsArray;
 
   function handleItemClick(item: GeneratedItem) {
     setSelectedItem((prev) => (prev?.id === item.id ? null : item));
@@ -59,7 +62,7 @@ export default function InventoryScreen({
   }
 
   const isEquipped = selectedItem
-    ? character.equippedItems.some((i) => i.id === selectedItem.id)
+    ? equippedItemsArray.some((i) => i.id === selectedItem.id)
     : false;
   const isInStash = selectedItem
     ? character.stash.some((i) => i.id === selectedItem.id)
@@ -67,16 +70,16 @@ export default function InventoryScreen({
 
   const TABS: { id: Tab; label: string; count: number }[] = [
     { id: 'inventory', label: '🎒 Inventory', count: character.inventory.length },
-    { id: 'stash',     label: '📦 Stash',     count: character.stash.length },
-    { id: 'equipped',  label: '⚔️ Equipped',  count: character.equippedItems.length },
+    { id: 'stash', label: '📦 Stash', count: character.stash.length },
+    { id: 'equipped', label: '⚔️ Equipped', count: equippedItemsArray.length },
   ];
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-4">
       {/* Header */}
-      <div className="bg-card border border-border rounded-xl p-5">
-        <h2 className="text-xl font-bold text-foreground">Inventory</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
+      <div className="bg-surface-1 border border-border rounded-xl p-5">
+        <h2 className="text-xl font-bold text-foreground font-display">Inventory</h2>
+        <p className="text-sm text-muted mt-0.5">
           Manage your equipment and stash. Gear is self-found — no vendors.
         </p>
       </div>
@@ -93,13 +96,13 @@ export default function InventoryScreen({
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
               activeTab === tab.id
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                : 'bg-surface-1 border border-border text-muted hover:text-foreground'
             }`}
           >
             {tab.label}
             <span
               className={`text-xs px-1.5 py-0.5 rounded-full ${
-                activeTab === tab.id ? 'bg-primary-foreground/20' : 'bg-muted'
+                activeTab === tab.id ? 'bg-primary-foreground/20' : 'bg-surface-2'
               }`}
             >
               {tab.count}
@@ -110,9 +113,9 @@ export default function InventoryScreen({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Item Grid */}
-        <div className="md:col-span-2 bg-card border border-border rounded-xl p-4">
+        <div className="md:col-span-2 bg-surface-1 border border-border rounded-xl p-4">
           {currentItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground/50">
+            <div className="flex flex-col items-center justify-center h-48 text-muted/50">
               <div className="text-4xl mb-2">
                 {activeTab === 'inventory' ? '🎒' : activeTab === 'stash' ? '📦' : '⚔️'}
               </div>
@@ -140,7 +143,7 @@ export default function InventoryScreen({
         </div>
 
         {/* Item Detail / Actions */}
-        <div className="bg-card border border-border rounded-xl p-4">
+        <div className="bg-surface-1 border border-border rounded-xl p-4">
           {selectedItem ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
@@ -149,7 +152,6 @@ export default function InventoryScreen({
               <ItemCard item={selectedItem} />
 
               <div className="space-y-2 pt-2 border-t border-border">
-                {/* Equip / Unequip */}
                 {isEquipped ? (
                   <button
                     onClick={handleUnequip}
@@ -166,20 +168,19 @@ export default function InventoryScreen({
                   </button>
                 )}
 
-                {/* Move to/from stash */}
                 {!isEquipped && (
                   <>
                     {isInStash ? (
                       <button
                         onClick={handleMoveFromStash}
-                        className="w-full py-2 rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 text-sm font-semibold transition-all"
+                        className="w-full py-2 rounded-lg bg-surface-2 text-muted hover:bg-surface-2/80 text-sm font-semibold transition-all"
                       >
                         Move to Inventory
                       </button>
                     ) : (
                       <button
                         onClick={handleMoveToStash}
-                        className="w-full py-2 rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 text-sm font-semibold transition-all"
+                        className="w-full py-2 rounded-lg bg-surface-2 text-muted hover:bg-surface-2/80 text-sm font-semibold transition-all"
                       >
                         Move to Stash
                       </button>
@@ -189,7 +190,7 @@ export default function InventoryScreen({
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground/50 py-8">
+            <div className="flex flex-col items-center justify-center h-full text-muted/50 py-8">
               <div className="text-3xl mb-2">👆</div>
               <div className="text-sm text-center">Select an item to see actions</div>
             </div>

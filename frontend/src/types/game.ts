@@ -14,7 +14,14 @@ export type Screen =
   | 'professions'
   | 'shrines';
 
-export type DungeonMode = 'catacombs' | 'depths' | 'ascension-trial';
+// DungeonMode: Catacombs and Depths replaced by numeric level input.
+// Only AscensionTrial remains as a named mode.
+export type DungeonMode = 'AscensionTrial';
+
+export interface DungeonRunConfig {
+  mode: DungeonMode | 'Standard';
+  monsterLevel: number;
+}
 
 export interface LocalItem {
   id: string;
@@ -50,8 +57,8 @@ export interface EquippedAbilities {
   slot3: string | null;
 }
 
+// LocalCharacterState — kept for backward compatibility with LevelUpModal and other components
 export interface LocalCharacterState {
-  // Mirrors backend Character but with local additions
   name: string;
   realm: 'Softcore' | 'Hardcore';
   classTier: number;
@@ -63,12 +70,11 @@ export interface LocalCharacterState {
   dex: number;
   int: number;
   vit: number;
-  // Local-only state
+  statPoints: number;
   inventory: LocalItem[];
   stash: LocalItem[];
   equipped: EquippedItems;
   equippedAbilities: EquippedAbilities;
-  statPoints: number;
   abilityPoints: number;
   gold: number;
 }
@@ -121,62 +127,17 @@ export const XP_PER_LEVEL: number[] = [
   15500,  // level 18
   18500,  // level 19
   22000,  // level 20
-  26000,  // level 21
-  31000,  // level 22
-  37000,  // level 23
-  44000,  // level 24
-  52000,  // level 25
-  61000,  // level 26
-  72000,  // level 27
-  85000,  // level 28
-  100000, // level 29
-  120000, // level 30
-  145000, // level 31
-  175000, // level 32
-  210000, // level 33
-  250000, // level 34
-  300000, // level 35
-  360000, // level 36
-  430000, // level 37
-  510000, // level 38
-  600000, // level 39
-  700000, // level 40
-  820000, // level 41
-  960000, // level 42
-  1120000,// level 43
-  1300000,// level 44
-  1500000,// level 45
-  1750000,// level 46
-  2050000,// level 47
-  2400000,// level 48
-  2800000,// level 49
-  3300000,// level 50
 ];
 
+/**
+ * Returns the total XP required to reach the given level.
+ * Exported for use in XPBar and other components.
+ */
 export function getXpForLevel(level: number): number {
   if (level <= 1) return 0;
-  if (level > XP_PER_LEVEL.length) return XP_PER_LEVEL[XP_PER_LEVEL.length - 1] * 2;
-  return XP_PER_LEVEL[level - 1];
-}
-
-export function getLevelFromXp(xp: number): number {
-  let level = 1;
-  for (let i = 1; i < XP_PER_LEVEL.length; i++) {
-    if (xp >= XP_PER_LEVEL[i]) {
-      level = i + 1;
-    } else {
-      break;
-    }
-  }
-  return level;
-}
-
-export function getStatPoints(level: number): number {
-  // 5 base points + 3 per level
-  return 5 + (level - 1) * 3;
-}
-
-export function getAbilityPoints(level: number): number {
-  // 1 base + 1 per 5 levels
-  return 1 + Math.floor((level - 1) / 5);
+  if (level - 1 < XP_PER_LEVEL.length) return XP_PER_LEVEL[level - 1];
+  // Beyond level 20: extrapolate
+  const base = XP_PER_LEVEL[XP_PER_LEVEL.length - 1];
+  const extra = (level - XP_PER_LEVEL.length) * 5000;
+  return base + extra;
 }
