@@ -1,163 +1,83 @@
 {
   "kind": "build_request",
-  "title": "Bug Fixes: Stat Persistence, Ability Points, Monster Tuning, Item Affixes, Drop Rate, Gold Removal",
+  "title": "Equipment stat application, monster name variety, and attack speed visibility",
   "projectName": "Abyss Ascendant",
-  "priority": "high",
+  "priority": "normal",
   "requirements": [
     {
-      "id": "REQ-17",
-      "text": "Fix stat persistence during character creation: when the player allocates 8 stat points and confirms creation, write the allocated Strength, Dexterity, Intelligence, and Vitality values directly into the character's baseStats record in stable storage. Do not use a temporary UI-only state object that gets discarded. Ensure no post-creation initialization step overwrites the assigned values with defaults.",
-      "target": "both",
-      "source": {
-        "messageIds": [
-          "msg-4"
-        ],
-        "quotes": [
-          "Players assign 8 stat points during character creation, but after exiting the creation screen all stats revert to 1.",
-          "Persist allocated stat values to the character object before leaving creation screen.",
-          "Confirm stat allocation modifies baseStats and not a temporary UI object.",
-          "Validate that stat initialization does not overwrite assigned values post-creation."
-        ]
-      },
-      "acceptanceCriteria": [
-        "After completing character creation with custom stat allocation, navigating away and returning to the character sheet shows the originally assigned stat values.",
-        "Stats are stored in Motoko stable variables and survive canister upgrades.",
-        "Character creation in CharacterCreation.tsx passes the fully allocated stat object to the backend mutation before unmounting.",
-        "No code path resets stats to 1 or to default values after the character is created."
-      ]
-    },
-    {
-      "id": "REQ-18",
-      "text": "Fix the ability point exploit and rework the ability system: characters start with exactly 1 ability point; earn +1 ability point every 10 levels (so at level 100 a character has 11 total points); each ability purchase costs 1 ability point; block the purchase UI when availableAbilityPoints == 0; enforce a hard cap of 3 simultaneously equipped abilities (players may own more than 3 but only equip 3); expand the ability pool in abilities.ts to approximately 15 abilities spread across melee, ranged, magic, and tank archetypes.",
-      "target": "both",
-      "source": {
-        "messageIds": [
-          "msg-4",
-          "msg-6"
-        ],
-        "quotes": [
-          "Player starts with 1 ability point but can purchase unlimited abilities.",
-          "Player starts with 1 ability point.",
-          "Player gains +1 ability point every 10 levels.",
-          "Abilities must cost 1 ability point each.",
-          "Prevent ability purchase if availableAbilityPoints == 0.",
-          "Maximum 3 active slotted abilities at a time.",
-          "Players may own more than 3 abilities but only equip 3.",
-          "Every 10 levels, which means at level 100 someone should have 11 ability points total. This means we'll need something like 15 total abilities to choose from."
-        ]
-      },
-      "acceptanceCriteria": [
-        "A freshly created character has exactly 1 ability point.",
-        "The character sheet and backend correctly grant +1 ability point at levels 10, 20, 30, … 100 (11 total at level 100).",
-        "Attempting to purchase an ability when availableAbilityPoints is 0 is blocked — the button is disabled and no point is deducted.",
-        "AbilitySelectModal enforces a maximum of 3 equipped abilities; equipping a 4th replaces or is blocked.",
-        "The ability pool in abilities.ts contains at least 15 distinct abilities with varied archetypes (melee, ranged, magic, tank).",
-        "Ability point balance is persisted in stable storage on the backend."
-      ]
-    },
-    {
-      "id": "REQ-19",
-      "text": "Rebalance monster difficulty: reduce the base damage of all monsters by approximately 10–15% and reduce HP scaling per dungeon level by approximately 10%. Apply these reductions in the monster templates in monsters.ts and in any scaling logic in combatEngine.ts. Keep encounters challenging but smooth out the early progression curve.",
+      "id": "REQ-23",
+      "text": "Fix equipment stats not being applied to the character's effective stats. In lootGenerator.ts, add a base physical damage value to all generated Weapon items (scaled by rarity and item level). Add a base defense value to all generated Armor items. In combatEngine.ts, update the player stat derivation logic to iterate over all equipped items and sum their base values (physical damage for weapons, defense for armor) plus all affixes (Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance) on top of the character's base stats before any combat calculation. Ensure the character sheet display in CharacterSheet.tsx also reads these aggregated effective stats rather than base stats alone.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-1",
+          "msg-3"
         ],
         "quotes": [
-          "Monsters are slightly overtuned.",
-          "Reduce monster base damage by ~10–15%.",
-          "Reduce monster HP scaling per level by ~10%.",
-          "Keep difficulty meaningful but smooth early progression curve."
+          "the equipment doesn't have physical damage dealt (weapons) and I'd guess the armor doesn't either",
+          "the stats the equipment has don't actually get added to your existing stats"
         ]
       },
       "acceptanceCriteria": [
-        "All 10 monster templates in monsters.ts have their base attack/damage values reduced by 10–15% compared to their previous values.",
-        "The HP scaling multiplier applied per dungeon level in the combat engine or monster scaling logic is reduced by 10%.",
-        "Level 1–10 dungeon runs are survivable for a freshly created Level 1 character with starting gear."
+        "Generated Weapon items have a non-zero base physical damage value visible in their tooltip.",
+        "Generated Armor items have a non-zero base defense value visible in their tooltip.",
+        "Equipping a weapon increases the player's effective physical damage in combat calculations.",
+        "Equipping armor increases the player's effective defense in combat calculations.",
+        "All affix stats (Str, Dex, Int, Vit, +HP, +PhysDmg, +MagDmg, +Def, +CritChance) on equipped items are added to effective stats.",
+        "CharacterSheet displays effective stats that include contributions from all equipped items.",
+        "Unequipping an item removes its stat contributions from effective stats."
       ]
     },
     {
-      "id": "REQ-20",
-      "text": "Restrict the random item affix pool in lootGenerator.ts to only the following valid stats: Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance. Remove all other affix types that are currently generated (e.g. any regen, speed, or unrecognized stats). Apply this restriction to all item types: weapons, armor, and charms/trinkets.",
+      "id": "REQ-24",
+      "text": "Add a prefix/suffix name generation system for monsters in monsters.ts and wherever monster names are displayed in combatEngine.ts and DungeonRunScreen.tsx. Define a pool of at least 8 thematic prefixes (e.g. Vile, Rotting, Ancient, Cursed, Feral, Festering, Hungering, Corrupted) and at least 6 thematic suffixes (e.g. Brute, Warden, Scout, Shaman, Ravager, Specter). On each monster spawn, randomly combine a prefix and/or suffix with the base monster type name to produce a unique display name (e.g. 'Cursed Goblin Brute', 'Ancient Troll Shaman'). The base stat profile remains unchanged; only the displayed name varies.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-3"
         ],
         "quotes": [
-          "Random item drops give bonuses to stats that do not exist.",
-          "Restrict Random Affixes To Only: Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance",
-          "Remove any other stat generation."
+          "there's a few more bug fixes as well like the lack of monster names. All I fight is a Goblin. Let's add some prefixes and suffixes for unique monster names."
         ]
       },
       "acceptanceCriteria": [
-        "Every affix generated in lootGenerator.ts maps to one of the nine listed stat keys only.",
-        "No item dropped in a dungeon run contains an affix outside this list.",
-        "ItemTooltip.tsx renders all nine affix types correctly without displaying undefined or unknown stat names."
+        "No monster encounter displays only the bare base type name (e.g. 'Goblin' alone).",
+        "All 10 monster types receive prefix/suffix treatment.",
+        "Generated names feel thematically consistent with the dark fantasy setting.",
+        "Monster names with prefix/suffix appear correctly in the combat log and HP bar labels in DungeonRunScreen.",
+        "The prefix and suffix are selected randomly each time a monster is spawned."
       ]
     },
     {
-      "id": "REQ-21",
-      "text": "Reduce the global item drop rate by 50% in lootGenerator.ts. This applies to all dungeon modes (Catacombs, Depths, Ascension Trial) and all monster types. If drops are determined by a probability roll, halve that probability. If drops are determined by a count, halve the expected count.",
+      "id": "REQ-25",
+      "text": "Expose Ticks Between Attacks as a visible stat for both the player and each monster. In combatEngine.ts, ensure the player's attack interval (in ticks) is derivable from effective stats (e.g. based on Dexterity or a fixed base modified by stat scaling). On CharacterSheet.tsx, add a 'Ticks Between Attacks' row in the derived stats section showing the player's current value. In DungeonRunScreen.tsx, display each spawned monster's ticks-between-attacks value alongside its HP bar or in the combat info panel. Both values must be read directly from the same tick-rate logic used by the combat engine to stay accurate.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-5"
         ],
         "quotes": [
-          "Reduce random item drop rate by 50% globally."
+          "Can you also include the number of ticks between attacks as a viewable stat? I thought that was cool"
         ]
       },
       "acceptanceCriteria": [
-        "The base drop probability or drop count in lootGenerator.ts is reduced to 50% of its previous value.",
-        "The reduction applies uniformly across all dungeon modes and monster loot weight tiers.",
-        "Rare and Legendary items are not disproportionately affected — the relative rarity ratios remain the same, only the overall drop frequency is halved."
-      ]
-    },
-    {
-      "id": "REQ-22",
-      "text": "Completely remove the gold system from the entire codebase: (a) backend — remove all gold fields from character/player records in main.mo, remove any gold rewards in dungeon result processing, remove gold from death penalty logic; (b) frontend — remove gold display from CharacterSheet, Navigation, and any other screen; remove gold reward lines from combat/loot output; update the Softcore death penalty to apply XP loss only (no gold loss); remove any vendor or store UI that requires gold. Gear must be self-found or traded via the marketplace only.",
-      "target": "both",
-      "source": {
-        "messageIds": [
-          "msg-4",
-          "msg-6"
-        ],
-        "quotes": [
-          "Completely remove gold.",
-          "Remove gold display.",
-          "Remove gold rewards from monsters.",
-          "No vendors/stores.",
-          "Gear must be self-found or traded.",
-          "Just experience is fine.",
-          "Gold fully removed — no display, no rewards, no vendors; Softcore death switches to XP loss only"
-        ]
-      },
-      "acceptanceCriteria": [
-        "No gold field exists on character or player records in the Motoko backend.",
-        "No gold amount is displayed anywhere in the frontend UI.",
-        "Dungeon completion callbacks return no gold reward; lootGenerator produces no gold drops.",
-        "Softcore death deducts a percentage of XP and shows an XP loss message; no gold loss message appears.",
-        "No vendor, shop, or store screen referencing gold exists in the app.",
-        "The marketplace screen (stub) references ICP rather than gold for any pricing labels."
+        "CharacterSheet shows a 'Ticks Between Attacks' stat derived from the combat engine's actual tick-rate formula.",
+        "DungeonRunScreen shows each active monster's ticks-between-attacks alongside its HP bar or combat info.",
+        "The displayed value for both player and monsters matches the interval used during live combat simulation.",
+        "Changes to Dexterity (or whichever stat governs attack speed) are reflected in the displayed ticks value."
       ]
     }
   ],
   "constraints": [
-    "Do not implement items 7–13 from the patch list (starting gear, base classes, ascension trial, ladder reset, crown rewards, leaderboard cleanup, ICP marketplace) — those are deferred to the next build.",
-    "Do not alter frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, or any file under frontend/src/components/ui.",
-    "Preserve existing Internet Identity auth flow and all screen navigation logic in App.tsx.",
-    "All Motoko changes must remain in backend/main.mo as a single actor."
+    "Do not alter the backend schema or Motoko actor for these changes — all three fixes are frontend-only.",
+    "Do not change the valid affix pool established in the previous patch (Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance).",
+    "Do not modify any files listed under frontend.immutablePaths."
   ],
   "nonGoals": [
-    "Starting gear for new characters (Rusty Sword / Torn Cloth Armor) — deferred.",
-    "Base class selection (Warrior, Rogue, Mage) at character creation — deferred.",
-    "Ascension Trial system (chalice mechanic, class tier unlock chain) — deferred.",
-    "Ladder reset triggered by tier 7 completion — deferred.",
-    "Crown reward system — deferred.",
-    "Leaderboard dummy data cleanup — deferred.",
-    "Real ICP ledger marketplace integration — deferred.",
-    "Any new UI screens or screen navigation changes beyond what is required by the 6 fixes above."
+    "Adding new monster types beyond the existing 10.",
+    "Changing monster base stat profiles or loot tables.",
+    "Backend changes to item or character storage.",
+    "Any new UI screens or navigation changes."
   ],
   "imageRequirements": {
     "required": [],

@@ -1,14 +1,14 @@
 # Specification
 
 ## Summary
-**Goal:** Apply six targeted bug fixes and balance changes to Abyss Ascendant: stat persistence, ability point system rework, monster rebalancing, item affix restrictions, drop rate reduction, and full gold system removal.
+**Goal:** Fix equipment stats being applied to effective stats, add variety to monster names via prefix/suffix generation, and expose attack speed (ticks between attacks) as a visible stat for players and monsters.
 
 **Planned changes:**
-- Fix character creation so allocated stat points (Strength, Dexterity, Intelligence, Vitality) are written directly to the character's baseStats in stable storage and never overwritten by defaults after creation
-- Rework the ability system: characters start with 1 ability point, gain +1 every 10 levels (11 total at level 100), each ability costs 1 point, purchases are blocked at 0 points, max 3 abilities can be equipped at once, and the ability pool in abilities.ts is expanded to ~15 abilities across melee, ranged, magic, and tank archetypes
-- Reduce all monster base damage by ~10–15% and reduce HP scaling per dungeon level by ~10% in monsters.ts and combatEngine.ts
-- Restrict random item affixes in lootGenerator.ts to only: Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance — removing all other affix types
-- Reduce global item drop rate by 50% across all dungeon modes and monster types in lootGenerator.ts
-- Completely remove the gold system from both backend (main.mo) and frontend (CharacterSheet, Navigation, loot output, death penalty logic); Softcore death switches to XP loss only; marketplace references ICP instead of gold
+- Add base physical damage to generated Weapon items and base defense to generated Armor items in `lootGenerator.ts`, scaled by rarity and item level.
+- Update `combatEngine.ts` player stat derivation to iterate over all equipped items and sum their base values plus all affixes on top of base character stats before combat calculations.
+- Update `CharacterSheet.tsx` to display effective stats that include all equipped item contributions, and add a "Ticks Between Attacks" row in the derived stats section.
+- Add a prefix/suffix name generation system in `monsters.ts` with at least 8 prefixes and 6 suffixes; apply randomly on each monster spawn to produce unique display names (e.g. "Cursed Goblin Brute").
+- Update `DungeonRunScreen.tsx` and combat log to display monster names with their generated prefix/suffix.
+- Derive player attack interval (ticks between attacks) from effective stats in `combatEngine.ts` and display each monster's ticks-between-attacks value alongside its HP bar in `DungeonRunScreen.tsx`.
 
-**User-visible outcome:** Players will see their stat allocations correctly persist after character creation, ability purchases will be properly gated and capped, early dungeon progression will feel more survivable, item drops will be less frequent with only valid stat affixes, and all gold references will be gone from the UI and game logic.
+**User-visible outcome:** Equipping weapons and armor now meaningfully increases player damage and defense. Every monster encountered has a unique themed name. Both the character sheet and the dungeon screen show how many ticks separate each attacker's strikes.

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LocalCharacter } from '../hooks/useLocalCharacter';
 import { ABILITIES } from '../data/abilities';
 import AbilitySelectModal from './AbilitySelectModal';
+import { derivePlayerStats, calculatePlayerTicksBetweenAttacks } from '../engine/combatEngine';
 
 interface CharacterSheetProps {
   character: LocalCharacter;
@@ -22,12 +23,32 @@ export default function CharacterSheet({
 
   const { stats, level, xp, realm, equippedAbilityIds, availableAbilityPoints } = character;
 
-  // Derived combat values
-  const maxHp = 50 + stats.vit * 10 + level * 5;
-  const physDmg = 5 + stats.str * 2 + stats.dex;
-  const magDmg = 5 + stats.int * 2;
-  const defense = 2 + Math.floor(stats.vit / 2) + Math.floor(stats.str / 4);
-  const critChance = 5 + stats.dex * 0.5;
+  // Derive effective combat stats using the same engine function used in combat
+  // This ensures CharacterSheet always matches what combat actually uses
+  const effectiveStats = derivePlayerStats({
+    str: stats.str,
+    dex: stats.dex,
+    int: stats.int,
+    vit: stats.vit,
+    level,
+    equippedItems: character.equippedItems,
+  });
+
+  const maxHp = effectiveStats.maxHp;
+  const physDmg = effectiveStats.attack;
+  const defense = effectiveStats.defense;
+  const critChance = effectiveStats.critChance;
+  const ticksBetweenAttacks = effectiveStats.ticksBetweenAttacks;
+
+  // Magic damage is derived separately (int-based, not in CombatStats directly)
+  const magDmg = Math.floor(
+    5 + stats.int * 2 +
+    (character.equippedItems?.reduce((sum, item) => {
+      const magAffix = item.affixes.find((a) => a.stat === 'magDmg');
+      const intAffix = item.affixes.find((a) => a.stat === 'int');
+      return sum + (magAffix?.value ?? 0) + (intAffix ? intAffix.value * 2 : 0);
+    }, 0) ?? 0)
+  );
 
   // XP progress
   const xpForCurrentLevel = (level - 1) * 100;
@@ -130,6 +151,11 @@ export default function CharacterSheet({
       <div className="bg-card border border-border rounded-xl p-5">
         <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-3">
           Combat Stats
+          {character.equippedItems && character.equippedItems.length > 0 && (
+            <span className="ml-2 text-xs font-normal text-muted-foreground normal-case">
+              (includes equipped gear)
+            </span>
+          )}
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {[
@@ -138,6 +164,7 @@ export default function CharacterSheet({
             { label: 'Magic Dmg', value: magDmg, icon: '✨' },
             { label: 'Defense', value: defense, icon: '🛡️' },
             { label: 'Crit Chance', value: `${critChance.toFixed(1)}%`, icon: '🎯' },
+            { label: 'Atk Speed', value: `${ticksBetweenAttacks} ticks`, icon: '⚡' },
           ].map(({ label, value, icon }) => (
             <div key={label} className="bg-background rounded-lg p-3 text-center">
               <div className="text-lg">{icon}</div>

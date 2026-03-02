@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 5,
+  "projectStateVersion": 7,
   "summary": "Full-stack browser-based real-time hack-and-slash RPG inspired by Ladder Slasher's gameplay loop. Built with React + TypeScript frontend and Motoko backend on ICP. Features Internet Identity auth, shared persistent on-chain world, ICP-based marketplace, live leaderboard, seasonal resets, hardcore/softcore realms, tick-based combat, class progression with Ascension Trials, and full itemization system.",
   "architectural_notes": [
     "Frontend: React + TypeScript with Canvas rendering for dungeon/combat screens",
@@ -13,7 +13,8 @@
     "Players retain stash/equipment across season resets; class unlock chain resets to Tier 1"
   ],
   "known_issues": [
-    "Real-time WebSocket co-op (live players in same dungeon) is not supported on ICP platform; multiplayer is shared-world async only"
+    "Real-time WebSocket co-op (live players in same dungeon) is not supported on ICP platform; multiplayer is shared-world async only",
+    "Equipment stats (weapon base damage, armor base defense, affixes) not applied to character effective stats in combat or character sheet"
   ],
   "isFixRequest": true,
   "existing_features": [
@@ -176,6 +177,30 @@
         "REQ-22"
       ],
       "version": 1
+    },
+    {
+      "id": "feature-fix-equipment-stats-not-being-applied-to-the-character-s-effective-stats-in-lootgenerator-ts-add-a-base-physical-damage-value-to-all-generated-weapon-items-scaled-by-rarity-and-item-level-add-a-base-defense-value-to-all-generated-armor-items-in-combatengine-ts-update-the-player-stat-derivation-logic-to-iterate-over-all-equipped-items-and-sum-their-base-values-physical-damage-for-weapons-defense-for-armor-plus-all-affixes-strength-dexterity-intelligence-vitality-hp-physical-damage-magic-damage-defense-critical-chance-on-top-of-the-character-s-base-stats-before-any-combat-calculation-ensure-the-character-sheet-display-in-charactersheet-tsx-also-reads-these-aggregated-effective-stats-rather-than-base-stats-alone",
+      "title": "Fix equipment stats not being applied to the character's effective stats. In lootGenerator.ts, add a base physical damage value to all generated Weapon items (scaled by rarity and item level). Add a base defense value to all generated Armor items. In combatEngine.ts, update the player stat derivation logic to iterate over all equipped items and sum their base values (physical damage for weapons, defense for armor) plus all affixes (Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance) on top of the character's base stats before any combat calculation. Ensure the character sheet display in CharacterSheet.tsx also reads these aggregated effective stats rather than base stats alone.",
+      "reqIds": [
+        "REQ-23"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-prefix-suffix-name-generation-system-for-monsters-in-monsters-ts-and-wherever-monster-names-are-displayed-in-combatengine-ts-and-dungeonrunscreen-tsx-define-a-pool-of-at-least-8-thematic-prefixes-e-g-vile-rotting-ancient-cursed-feral-festering-hungering-corrupted-and-at-least-6-thematic-suffixes-e-g-brute-warden-scout-shaman-ravager-specter-on-each-monster-spawn-randomly-combine-a-prefix-and-or-suffix-with-the-base-monster-type-name-to-produce-a-unique-display-name-e-g-cursed-goblin-brute-ancient-troll-shaman-the-base-stat-profile-remains-unchanged-only-the-displayed-name-varies",
+      "title": "Add a prefix/suffix name generation system for monsters in monsters.ts and wherever monster names are displayed in combatEngine.ts and DungeonRunScreen.tsx. Define a pool of at least 8 thematic prefixes (e.g. Vile, Rotting, Ancient, Cursed, Feral, Festering, Hungering, Corrupted) and at least 6 thematic suffixes (e.g. Brute, Warden, Scout, Shaman, Ravager, Specter). On each monster spawn, randomly combine a prefix and/or suffix with the base monster type name to produce a unique display name (e.g. 'Cursed Goblin Brute', 'Ancient Troll Shaman'). The base stat profile remains unchanged; only the displayed name varies.",
+      "reqIds": [
+        "REQ-24"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-expose-ticks-between-attacks-as-a-visible-stat-for-both-the-player-and-each-monster-in-combatengine-ts-ensure-the-player-s-attack-interval-in-ticks-is-derivable-from-effective-stats-e-g-based-on-dexterity-or-a-fixed-base-modified-by-stat-scaling-on-charactersheet-tsx-add-a-ticks-between-attacks-row-in-the-derived-stats-section-showing-the-player-s-current-value-in-dungeonrunscreen-tsx-display-each-spawned-monster-s-ticks-between-attacks-value-alongside-its-hp-bar-or-in-the-combat-info-panel-both-values-must-be-read-directly-from-the-same-tick-rate-logic-used-by-the-combat-engine-to-stay-accurate",
+      "title": "Expose Ticks Between Attacks as a visible stat for both the player and each monster. In combatEngine.ts, ensure the player's attack interval (in ticks) is derivable from effective stats (e.g. based on Dexterity or a fixed base modified by stat scaling). On CharacterSheet.tsx, add a 'Ticks Between Attacks' row in the derived stats section showing the player's current value. In DungeonRunScreen.tsx, display each spawned monster's ticks-between-attacks value alongside its HP bar or in the combat info panel. Both values must be read directly from the same tick-rate logic used by the combat engine to stay accurate.",
+      "reqIds": [
+        "REQ-25"
+      ],
+      "version": 1
     }
   ],
   "new_feature_requests": [
@@ -265,6 +290,24 @@
       "reqIds": [
         "REQ-7"
       ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-20",
+      "summary": "Fix equipment stats not applied to character: weapon base physical damage, armor base defense, and all affixes summed into effective stats for combat and character sheet",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-21",
+      "summary": "Monster name variety: prefix/suffix name generation system across all 10 monster types",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-22",
+      "summary": "Ticks Between Attacks as a visible stat on character sheet and combat UI for both player and monsters",
+      "reqIds": [],
       "status": "pending"
     }
   ],

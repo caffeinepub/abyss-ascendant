@@ -76,6 +76,26 @@ export default function ItemTooltip({ item, className = '' }: ItemTooltipProps) 
         </div>
       </div>
 
+      {/* Base Weapon Damage */}
+      {item.itemType === 'Weapon' && item.baseDamage !== undefined && (
+        <div className="border-t border-border/50 pt-2 mb-2">
+          <div className="flex items-center gap-2 text-xs text-orange-400 font-semibold">
+            <span>⚔️</span>
+            <span>Base Damage: {item.baseDamage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Base Armor Defense */}
+      {item.itemType === 'Armor' && item.baseDefense !== undefined && (
+        <div className="border-t border-border/50 pt-2 mb-2">
+          <div className="flex items-center gap-2 text-xs text-cyan-400 font-semibold">
+            <span>🛡️</span>
+            <span>Base Defense: {item.baseDefense}</span>
+          </div>
+        </div>
+      )}
+
       {/* Affixes */}
       {item.affixes.length > 0 && (
         <div className="space-y-1 border-t border-border/50 pt-2">
@@ -85,7 +105,7 @@ export default function ItemTooltip({ item, className = '' }: ItemTooltipProps) 
         </div>
       )}
 
-      {item.affixes.length === 0 && (
+      {item.affixes.length === 0 && !item.baseDamage && !item.baseDefense && (
         <div className="text-xs text-muted-foreground italic">No bonuses</div>
       )}
     </div>
@@ -124,6 +144,19 @@ export function ItemCard({
           <div className="text-xs text-muted-foreground">{item.rarity}</div>
         </div>
       </div>
+
+      {/* Base stats for weapons/armor */}
+      {item.itemType === 'Weapon' && item.baseDamage !== undefined && (
+        <div className="mt-1 text-xs text-orange-400 font-semibold">
+          ⚔️ {item.baseDamage} Base Dmg
+        </div>
+      )}
+      {item.itemType === 'Armor' && item.baseDefense !== undefined && (
+        <div className="mt-1 text-xs text-cyan-400 font-semibold">
+          🛡️ {item.baseDefense} Base Def
+        </div>
+      )}
+
       {item.affixes.length > 0 && (
         <div className="mt-1 space-y-0.5">
           {item.affixes.map((affix, i) => {

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { LocalCharacter } from '../hooks/useLocalCharacter';
-import { runFullCombat, CombatLogEntry, CombatResult } from '../engine/combatEngine';
+import { runFullCombat, CombatLogEntry, CombatResult, spawnMonster, MonsterInstance } from '../engine/combatEngine';
 import { GeneratedItem } from '../engine/lootGenerator';
 import { useSubmitDungeonResult } from '../hooks/useQueries';
 
@@ -41,6 +41,8 @@ export default function DungeonRunScreen({
   const [result, setResult] = useState<CombatResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [currentLogIndex, setCurrentLogIndex] = useState(0);
+  // Preview monster for showing stats before combat resolves
+  const [previewMonster, setPreviewMonster] = useState<MonsterInstance | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const submitDungeonResult = useSubmitDungeonResult();
 
@@ -63,6 +65,9 @@ export default function DungeonRunScreen({
       dungeonMode
     );
 
+    // Spawn a preview monster to show stats (separate instance for display only)
+    const preview = spawnMonster(dungeonLevel);
+    setPreviewMonster(preview);
     setResult(combatResult);
   }, [character, dungeonLevel, dungeonMode]);
 
@@ -130,6 +135,37 @@ export default function DungeonRunScreen({
           <div>Level {character.level}</div>
         </div>
       </div>
+
+      {/* Monster Info Panel */}
+      {previewMonster && (
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <span className="text-4xl">{previewMonster.template.emoji}</span>
+            <div className="flex-1">
+              <div className="font-bold text-foreground">{previewMonster.name}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                HP: {previewMonster.maxHp} · ATK: {previewMonster.attack} · DEF: {previewMonster.defense}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">Atk Speed</div>
+              <div className="text-sm font-semibold text-orange-400">
+                ⚡ {previewMonster.ticksBetweenAttacks} ticks
+              </div>
+            </div>
+          </div>
+          {/* Monster HP bar */}
+          <div className="mt-3">
+            <div className="flex justify-between text-xs text-muted-foreground mb-1">
+              <span>{previewMonster.name}</span>
+              <span>{previewMonster.maxHp} HP</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-red-500 rounded-full w-full transition-all duration-300" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Combat Log */}
       <div className="bg-card border border-border rounded-xl p-4">

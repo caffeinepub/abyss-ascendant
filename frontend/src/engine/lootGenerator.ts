@@ -24,6 +24,10 @@ export interface GeneratedItem {
   rarity: Rarity;
   affixes: ItemAffix[];
   icon: string;
+  /** Base physical damage for Weapon items (non-zero) */
+  baseDamage?: number;
+  /** Base defense for Armor items (non-zero) */
+  baseDefense?: number;
 }
 
 // ── Valid affix pool (restricted to 9 valid stats only) ──
@@ -68,14 +72,24 @@ const RARITY_AFFIX_COUNT: Record<Rarity, number> = {
   [Rarity.Legendary]: 4,
 };
 
-function weightedRandom<T>(items: { weight: number; value?: T }[], values?: T[]): T {
-  const total = items.reduce((sum, i) => sum + i.weight, 0);
-  let roll = Math.random() * total;
-  for (let i = 0; i < items.length; i++) {
-    roll -= items[i].weight;
-    if (roll <= 0) return values ? values[i] : (items[i] as unknown as { value: T }).value!;
-  }
-  return values ? values[values.length - 1] : (items[items.length - 1] as unknown as { value: T }).value!;
+// Base damage ranges for weapons by rarity
+const WEAPON_BASE_DAMAGE: Record<Rarity, [number, number]> = {
+  [Rarity.Common]:    [2, 5],
+  [Rarity.Uncommon]:  [5, 10],
+  [Rarity.Rare]:      [10, 18],
+  [Rarity.Legendary]: [18, 30],
+};
+
+// Base defense ranges for armor by rarity
+const ARMOR_BASE_DEFENSE: Record<Rarity, [number, number]> = {
+  [Rarity.Common]:    [1, 3],
+  [Rarity.Uncommon]:  [3, 6],
+  [Rarity.Rare]:      [6, 12],
+  [Rarity.Legendary]: [12, 20],
+};
+
+function randInRange(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 function pickRarity(): Rarity {
@@ -122,8 +136,6 @@ const ITEM_ICONS: Record<string, string> = {
 };
 
 // ── Drop rate: base probability reduced by 50% ──
-// Original: ~0.6 base drop chance per monster kill
-// New: ~0.3 base drop chance per monster kill
 const BASE_DROP_CHANCE = 0.30;
 
 export function generateLoot(
@@ -131,15 +143,12 @@ export function generateLoot(
   monsterLootWeight: number,
   dungeonMode: 'Catacombs' | 'Depths' | 'AscensionTrial'
 ): GeneratedItem | null {
-  // Mode multipliers (relative ratios preserved, overall halved)
   const modeMultiplier =
     dungeonMode === 'Catacombs'      ? 0.5  :
     dungeonMode === 'Depths'         ? 0.75 :
     /* AscensionTrial */               1.0;
 
-  // lootWeight is 3–10; normalize to 0.3–1.0
   const weightFactor = monsterLootWeight / 10;
-
   const dropChance = BASE_DROP_CHANCE * modeMultiplier * weightFactor;
 
   if (Math.random() > dropChance) return null;
@@ -149,6 +158,23 @@ export function generateLoot(
   const affixes = generateAffixes(rarity);
   const name = pickName(itemType);
 
+  // Level scaling factor (1.0 at level 1, up to ~2.0 at level 20)
+  const levelScale = 1 + Math.min(dungeonLevel, 20) * 0.05;
+
+  // Generate base damage for weapons
+  let baseDamage: number | undefined;
+  if (itemType === 'Weapon') {
+    const [min, max] = WEAPON_BASE_DAMAGE[rarity];
+    baseDamage = Math.floor(randInRange(min, max) * levelScale);
+  }
+
+  // Generate base defense for armor
+  let baseDefense: number | undefined;
+  if (itemType === 'Armor') {
+    const [min, max] = ARMOR_BASE_DEFENSE[rarity];
+    baseDefense = Math.floor(randInRange(min, max) * levelScale);
+  }
+
   return {
     id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     name,
@@ -156,6 +182,8 @@ export function generateLoot(
     rarity,
     affixes,
     icon: ITEM_ICONS[itemType],
+    baseDamage,
+    baseDefense,
   };
 }
 
