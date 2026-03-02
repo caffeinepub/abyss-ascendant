@@ -1,62 +1,87 @@
 {
   "kind": "build_request",
-  "title": "Fix HP preservation on character select and attack tick rate defaults",
+  "title": "Procedural Monster Generation with Stat-Based Additive XP Scaling",
+  "projectName": "Abyss Ascendant",
   "priority": "normal",
   "requirements": [
     {
       "id": "REQ-1",
-      "text": "When a player backs out to the character select screen and re-selects their character, the character's current HP must be preserved exactly as it was — it must NOT reset to max HP. The HP value should be saved (either to backend or persistent local state) before navigating away from the dungeon/game screen and restored when re-entering with that character.",
-      "target": "both",
+      "text": "Expand the monster roster in frontend/src/data/monsters.ts to include a diverse set of prefix and suffix pools (e.g., prefixes: 'Ancient', 'Infernal', 'Cursed', 'Withered', 'Verdant', 'Dread', 'Spectral', 'Molten', 'Forsaken', 'Elder'; suffixes: 'Goblin', 'Warlord', 'Shade', 'Colossus', 'Serpent', 'Revenant', 'Wraith', 'Titan', 'Fiend', 'Elder God'). Each prefix and suffix must carry a stat modifier object (multipliers or flat bonuses for HP, attack, and defense) so that the generated monster's final stats are a combination of its base template stats and both the prefix and suffix modifiers. The `generateMonsterName` (or equivalent) utility must produce a unique monster name and resolved final stats each time it is called.",
+      "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-user-focus"
+          "msg-3",
+          "msg-5",
+          "msg-7"
         ],
         "quotes": [
-          "If I back out of the game to the character select screen my characters life is still going back to 20/max no matter how much life I had before going back to the character select screen. This needs to be fixed.",
-          "It should preserve whatever HP the character was at."
+          "create a sample set using suffixes and prefixes to make a unique monster every time",
+          "Procedural monsters built from prefix + suffix combinations (e.g., \"Ancient\", \"Infernal\", \"Cursed\" + \"Goblin\", \"Warlord\", \"Elder God\") — each with stats influenced by their modifiers"
         ]
       },
       "acceptanceCriteria": [
-        "Player enters a dungeon run with, e.g., 45/100 HP",
-        "Player backs out to the character select screen",
-        "Player re-selects the same character",
-        "The character's HP displays as 45/100, not 100/100 or 20/max",
-        "HP preservation works consistently across multiple back-and-forth navigations"
+        "At least 10 prefixes and 10 suffixes are defined, each with a stat modifier object containing HP, attack, and defense values.",
+        "Calling the monster generation function twice produces monsters with different names and/or stats in the vast majority of cases.",
+        "A generated monster's HP, attack, and defense stats visibly reflect the combined modifiers of its prefix and suffix (e.g., 'Infernal' prefix boosts attack, 'Colossus' suffix boosts HP and defense).",
+        "Monster names displayed in combat follow the 'Prefix Suffix' pattern (e.g., 'Ancient Elder God')."
       ]
     },
     {
       "id": "REQ-2",
-      "text": "Fix the player attack tick rate so the player attacks every 12 ticks by default (not every tick). Additionally, set level 1 enemies to attack every 21 ticks, scaling down by 1 tick every 5 enemy levels (level 5 = 20 ticks, level 10 = 19 ticks, level 15 = 18 ticks, etc.). These values must be defined as named constants in the combat engine and must not be changed unless explicitly requested.",
+      "text": "Update the combat XP reward calculation in frontend/src/engine/combatEngine.ts to use an additive formula: Final XP = base XP (derived from monster level) + flat bonus per HP point + flat bonus per attack point + flat bonus per defense point. All three stat bonuses must contribute equally (same per-point bonus rate). This means a monster with high HP, high attack, AND high defense awards significantly more XP than a low-stat monster of the same level.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-user-focus"
+          "msg-1",
+          "msg-3",
+          "msg-5"
         ],
         "quotes": [
-          "I'm attacking every tick. I thought we had this set to 12 ticks.",
-          "Make player default 12 ticks. Make level 1 enemy 21 ticks. Scale 1 lower on ticks for enemies every 5 levels."
+          "XP rewards will scale based on a combination of monster level AND monster stats (defense, HP, attack power, etc.)",
+          "Additive formula (base XP + bonuses per stat)",
+          "Equally",
+          "base XP (from monster level) + equal flat bonuses for HP, attack, and defense stats"
         ]
       },
       "acceptanceCriteria": [
-        "Player character attacks exactly once every 12 combat ticks",
-        "A level 1 enemy attacks once every 21 ticks",
-        "A level 5 enemy attacks once every 20 ticks",
-        "A level 10 enemy attacks once every 19 ticks",
-        "Tick scaling formula is: enemyAttackTicks = 21 - Math.floor((enemyLevel - 1) / 5)",
-        "Player attack interval constant is named clearly (e.g., PLAYER_ATTACK_INTERVAL = 12) in combatEngine.ts",
-        "No other combat logic or game behavior is changed"
+        "The XP formula is clearly additive: Final XP = baseXP(level) + (hpBonus * monsterHP) + (atkBonus * monsterAttack) + (defBonus * monsterDefense), where hpBonus, atkBonus, and defBonus are equal constants.",
+        "A high-defense 'Ancient Elder God' awards significantly more XP than a low-stat 'Weak Goblin' at the same monster level.",
+        "XP reward shown in the combat log and DungeonRunScreen reflects the new formula.",
+        "The bonus constants are tuned so stat contributions are meaningful but not so extreme that they overshadow level-based scaling."
+      ]
+    },
+    {
+      "id": "REQ-3",
+      "text": "Update DungeonRunScreen and DungeonSelectScreen to use the new procedural monster generation system. When a dungeon run begins, generate a monster using the prefix+suffix system at the selected monster level, then run combat against that procedurally generated monster (with its combined stats). Display the generated monster's full name (e.g., 'Infernal Titan') in the combat log and any monster stat previews.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-7"
+        ],
+        "quotes": [
+          "Procedural monster generation using prefix + suffix combinations",
+          "tougher stat combos = more XP, so a high-defense Elder God pays out far more than a weak Goblin at the same level"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Each dungeon run generates a new monster with a procedurally combined name and stats.",
+        "The monster's full 'Prefix Suffix' name is shown in the combat log.",
+        "The combat engine receives the generated monster's final stats (HP, attack, defense) and uses them for the fight.",
+        "XP awarded at the end of the run reflects the generated monster's actual stats via the new additive formula."
       ]
     }
   ],
   "constraints": [
-    "Do not change any game logic, features, or mechanics outside of HP preservation and attack tick rate",
-    "Do not alter EXP scaling or any other combat parameters",
-    "Do not modify immutable frontend paths (hooks/useInternetIdentity.ts, hooks/useActor.ts, main.tsx, components/ui)"
+    "All stat bonus rates for HP, attack, and defense in the XP formula must be equal (same per-point value).",
+    "Do not modify any files listed in frontend.immutablePaths.",
+    "Backend data model should not need changes; all monster generation and XP calculation logic stays on the frontend."
   ],
   "nonGoals": [
-    "EXP scaling based on monster level and stats (deferred by user)",
-    "Any other combat rebalancing or new features",
-    "UI or visual changes"
+    "Persistent monster definitions stored in the backend.",
+    "Unequal stat weighting in the XP formula.",
+    "Multiplicative XP scaling.",
+    "Changes to loot drop rates or loot generation logic.",
+    "UI redesign or theme changes."
   ],
   "imageRequirements": {
     "required": [],

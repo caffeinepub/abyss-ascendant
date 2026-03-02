@@ -1,9 +1,17 @@
 import { GeneratedItem, generateLoot } from './lootGenerator';
-import { MONSTER_TEMPLATES, MonsterTemplate } from '../data/monsters';
+import { GeneratedMonster, generateMonster } from '../data/monsters';
 import { ABILITIES } from '../data/abilities';
 
 // Player attacks once every PLAYER_ATTACK_INTERVAL ticks
 const PLAYER_ATTACK_INTERVAL = 12;
+
+// ─── Additive XP formula constants ───────────────────────────────────────────
+// Final XP = baseXP(level) + (STAT_BONUS_PER_POINT * monsterHP)
+//                          + (STAT_BONUS_PER_POINT * monsterAttack)
+//                          + (STAT_BONUS_PER_POINT * monsterDefense)
+// All three stats contribute equally (same per-point value).
+// Tuned so stat contributions are meaningful but don't overshadow level scaling.
+const STAT_BONUS_PER_POINT = 0.4;
 
 /**
  * Calculate the number of ticks between enemy attacks based on enemy level.
@@ -101,11 +109,25 @@ function isCrit(critChance: number): boolean {
   return Math.random() * 100 < critChance;
 }
 
+/**
+ * Additive XP reward formula.
+ * baseXP scales with monster level; equal flat bonuses are added for each
+ * stat point of HP, attack, and defense on the scaled monster.
+ *
+ * Final XP = baseXP(level) + STAT_BONUS_PER_POINT * (scaledHp + scaledAtk + scaledDef)
+ */
+function calculateXpReward(monsterLevel: number, scaledHp: number, scaledAtk: number, scaledDef: number): number {
+  const baseXp = Math.floor(10 * monsterLevel * (1 + monsterLevel * 0.1));
+  const statBonus = Math.floor(STAT_BONUS_PER_POINT * (scaledHp + scaledAtk + scaledDef));
+  return baseXp + statBonus;
+}
+
 export function simulateCombat(
   playerStats: CombatStats,
   dungeonLevel: number,
   isHardcore: boolean,
-  realm: 'Softcore' | 'Hardcore'
+  realm: 'Softcore' | 'Hardcore',
+  preGeneratedMonsters?: GeneratedMonster[]
 ): CombatResult {
   const log: string[] = [];
   const loot: GeneratedItem[] = [];
@@ -137,17 +159,16 @@ export function simulateCombat(
   // Cap monster level
   const monsterLevel = Math.min(dungeonLevel, 50);
 
-  // Pick monsters
-  const monsterTemplates: MonsterTemplate[] = [];
-  for (let i = 0; i < numMonsters; i++) {
-    const idx = Math.floor(Math.random() * MONSTER_TEMPLATES.length);
-    monsterTemplates.push(MONSTER_TEMPLATES[idx]);
-  }
+  // Use pre-generated monsters if provided, otherwise generate fresh ones
+  const monsterPool: GeneratedMonster[] = preGeneratedMonsters && preGeneratedMonsters.length > 0
+    ? preGeneratedMonsters
+    : Array.from({ length: numMonsters }, () => generateMonster());
 
   log.push(`Entering dungeon level ${dungeonLevel}...`);
 
-  for (let mi = 0; mi < monsterTemplates.length; mi++) {
-    const template = monsterTemplates[mi];
+  for (let mi = 0; mi < monsterPool.length; mi++) {
+    const template = monsterPool[mi];
+
     // HP scaling: base HP at level 1, grows ~15% per level above 1
     const scaledHp = Math.floor(template.baseHp * (1 + Math.max(0, monsterLevel - 1) * 0.15));
     const scaledAtk = Math.floor(template.baseAttack * (1 + monsterLevel * 0.12));
@@ -167,7 +188,7 @@ export function simulateCombat(
       ticksSinceLastAttack: 0,
     };
 
-    log.push(`\nEncountered ${monster.name} (Level ${monster.level}) — HP: ${monster.hp}`);
+    log.push(`\nYou are battling ${monster.name} (Level ${monster.level}) — HP: ${monster.hp}`);
 
     let tick = 0;
     let playerTicksSinceLastAttack = 0;
@@ -243,7 +264,8 @@ export function simulateCombat(
 
     if (monster.hp <= 0) {
       monstersDefeated++;
-      const xp = Math.floor(10 * monsterLevel * (1 + monsterLevel * 0.1));
+      // Additive XP formula: baseXP(level) + equal per-point bonuses for HP, attack, defense
+      const xp = calculateXpReward(monsterLevel, scaledHp, scaledAtk, scaledDef);
       xpEarned += xp;
       log.push(`${monster.name} defeated! +${xp} XP`);
 

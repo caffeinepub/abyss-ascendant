@@ -125,6 +125,11 @@ export interface backendInterface {
     deleteCharacter(characterId: CharacterId): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    /**
+     * / Load a specific character by its ID.
+     * / Applies access control and returns character data only if found.
+     */
+    getCharacter(characterId: CharacterId): Promise<Character | null>;
     getCharacters(): Promise<Array<Character>>;
     getItem(itemId: string): Promise<Item | null>;
     getItemImage(itemId: string): Promise<ExternalBlob>;

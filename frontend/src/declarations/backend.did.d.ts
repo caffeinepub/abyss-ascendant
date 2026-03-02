@@ -131,6 +131,11 @@ export interface _SERVICE {
   'deleteCharacter' : ActorMethod<[CharacterId], undefined>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  /**
+   * / Load a specific character by its ID.
+   * / Applies access control and returns character data only if found.
+   */
+  'getCharacter' : ActorMethod<[CharacterId], [] | [Character]>,
   'getCharacters' : ActorMethod<[], Array<Character>>,
   'getItem' : ActorMethod<[string], [] | [Item]>,
   'getItemImage' : ActorMethod<[string], ExternalBlob>,

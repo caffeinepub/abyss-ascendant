@@ -1,49 +1,61 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T14:16:22.511Z",
+  "generatedAt": "2026-03-02T15:10:33.906Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 2,
-    "implemented": 2,
+    "total": 3,
+    "implemented": 3,
     "items": [
       {
         "id": "REQ-1",
-        "summary": "When a player backs out to the character select screen and re-selects their character, the character's current HP must be preserved exactly as it was — it must NOT reset to max HP. The HP value should be saved (either to backend or persistent local state) before navigating away from the dungeon/game screen and restored when re-entering with that character.",
+        "summary": "Expand the monster roster in frontend/src/data/monsters.ts to include a diverse set of prefix and suffix pools (e.g., prefixes: 'Ancient', 'Infernal', 'Cursed', 'Withered', 'Verdant', 'Dread', 'Spectral', 'Molten', 'Forsaken', 'Elder'; suffixes: 'Goblin', 'Warlord', 'Shade', 'Colossus', 'Serpent', 'Revenant', 'Wraith', 'Titan', 'Fiend', 'Elder God'). Each prefix and suffix must carry a stat modifier object (multipliers or flat bonuses for HP, attack, and defense) so that the generated monster's final stats are a combination of its base template stats and both the prefix and suffix modifiers. The `generateMonsterName` (or equivalent) utility must produce a unique monster name and resolved final stats each time it is called.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/App.tsx",
-          "frontend/src/hooks/useLocalCharacter.ts",
-          "frontend/src/components/CharacterSelectScreen.tsx",
-          "frontend/src/components/DungeonRunScreen.tsx"
+          "frontend/src/data/monsters.ts"
         ],
         "matchedFiles": [
-          "frontend/src/App.tsx"
+          "frontend/src/data/monsters.ts"
         ]
       },
       {
         "id": "REQ-2",
-        "summary": "Fix the player attack tick rate so the player attacks every 12 ticks by default (not every tick). Additionally, set level 1 enemies to attack every 21 ticks, scaling down by 1 tick every 5 enemy levels (level 5 = 20 ticks, level 10 = 19 ticks, level 15 = 18 ticks, etc.). These values must be defined as named constants in the combat engine and must not be changed unless explicitly requested.",
+        "summary": "Update the combat XP reward calculation in frontend/src/engine/combatEngine.ts to use an additive formula: Final XP = base XP (derived from monster level) + flat bonus per HP point + flat bonus per attack point + flat bonus per defense point. All three stat bonuses must contribute equally (same per-point bonus rate). This means a monster with high HP, high attack, AND high defense awards significantly more XP than a low-stat monster of the same level.",
         "status": "implemented",
         "plannedFiles": [
           "frontend/src/engine/combatEngine.ts"
         ],
         "matchedFiles": [
           "frontend/src/engine/combatEngine.ts"
+        ]
+      },
+      {
+        "id": "REQ-3",
+        "summary": "Update DungeonRunScreen and DungeonSelectScreen to use the new procedural monster generation system. When a dungeon run begins, generate a monster using the prefix+suffix system at the selected monster level, then run combat against that procedurally generated monster (with its combined stats). Display the generated monster's full name (e.g., 'Infernal Titan') in the combat log and any monster stat previews.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/components/DungeonSelectScreen.tsx",
+          "frontend/src/components/DungeonRunScreen.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/components/DungeonSelectScreen.tsx",
+          "frontend/src/components/DungeonRunScreen.tsx"
         ]
       }
     ]
   },
   "changedFiles": [
-    "backend/main.mo",
     "build-request.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
     "frontend/src/App.tsx",
+    "frontend/src/components/DungeonRunScreen.tsx",
+    "frontend/src/components/DungeonSelectScreen.tsx",
+    "frontend/src/data/monsters.ts",
     "frontend/src/engine/combatEngine.ts",
     "project_state.json",
     "scratch/component-selection.json",

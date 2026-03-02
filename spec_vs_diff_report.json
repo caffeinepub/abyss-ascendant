@@ -1,15 +1,36 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T14:16:22.508Z",
-  "summary": "Both REQ-1 (HP preservation on character select) and REQ-2 (attack tick rate constants) appear to be implemented in the diff. REQ-2 is clearly implemented with named constants in combatEngine.ts. REQ-1 is implemented via saving HP to the backend before navigating away in App.tsx's handleBackToCharacterSelect, and the backend's setHp endpoint supports it. No significant missing requirements or hallucinated features were found.",
-  "missing_requirements": [],
-  "hallucinated_features": [],
-  "confidence": 0.87,
+  "generatedAt": "2026-03-02T15:10:33.903Z",
+  "summary": "All three requirements are substantially implemented. REQ-1 is fully met with 12 prefixes and 12 suffixes each carrying stat modifiers, and a generateMonster() function combining prefix+base+suffix stats. REQ-2 is implemented with an additive XP formula using equal STAT_BONUS_PER_POINT constants. REQ-3 is implemented with DungeonSelectScreen generating monsters and DungeonRunScreen accepting and using them. One minor concern: the generated monster name follows 'Prefix BaseName Suffix' (three-part) rather than the specified 'Prefix Suffix' (two-part) pattern, though the spec examples show 'Prefix Suffix' like 'Infernal Titan' and 'Ancient Elder God'.",
+  "missing_requirements": [
+    {
+      "id": "REQ-1",
+      "requirement": "Monster names displayed in combat follow the 'Prefix Suffix' pattern (e.g., 'Ancient Elder God') — two-part name without a base template name in between.",
+      "reason": "The diff shows monsters.ts generates names as 'Prefix BaseName Suffix' (three-part, e.g., 'Ancient Goblin Elder God') rather than the specified 'Prefix Suffix' two-part pattern. The frontend-file-summaries.txt explicitly states the name format is 'Prefix BaseName Suffix'.",
+      "evidence": [
+        "frontend/src/data/monsters.ts",
+        "frontend-file-summaries.txt"
+      ]
+    }
+  ],
+  "hallucinated_features": [
+    {
+      "description": "A base monster template pool (MONSTER_TEMPLATES) with 10 named monster types (Goblin, Skeleton, Orc, Troll, Wraith, Vampire, etc.) is incorporated into the name generation as a middle segment, creating a three-part naming system not specified in the requirements.",
+      "reason": "The build request specifies a prefix+suffix system producing 'Prefix Suffix' names. The implementation adds a third base template component to the name, which was not requested.",
+      "evidence": [
+        "frontend/src/data/monsters.ts",
+        "frontend-file-summaries.txt"
+      ]
+    }
+  ],
+  "confidence": 0.82,
   "changed_files": [
-    "backend/main.mo",
     "frontend-file-summaries.txt",
     "frontend/src/App.tsx",
+    "frontend/src/components/DungeonRunScreen.tsx",
+    "frontend/src/components/DungeonSelectScreen.tsx",
+    "frontend/src/data/monsters.ts",
     "frontend/src/engine/combatEngine.ts",
     "project_state.json"
   ]

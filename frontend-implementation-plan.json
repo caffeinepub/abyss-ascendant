@@ -1,58 +1,61 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Fix HP preservation on character select and attack tick rate defaults",
+  "title": "Procedural Monster Generation with Stat-Based Additive XP Scaling",
   "requirements": [
     {
       "id": "REQ-1",
-      "summary": "Preserve character HP when backing out to character select and re-entering the dungeon, preventing it from resetting to max HP",
+      "summary": "Expand monster roster with diverse prefix and suffix pools that carry stat modifiers, enabling unique procedurally generated monsters with combined stats",
       "acceptanceCriteria": [
-        "Player enters a dungeon run with, e.g., 45/100 HP",
-        "Player backs out to the character select screen",
-        "Player re-selects the same character",
-        "The character's HP displays as 45/100, not 100/100 or 20/max",
-        "HP preservation works consistently across multiple back-and-forth navigations"
+        "At least 10 prefixes and 10 suffixes are defined, each with a stat modifier object containing HP, attack, and defense values.",
+        "Calling the monster generation function twice produces monsters with different names and/or stats in the vast majority of cases.",
+        "A generated monster's HP, attack, and defense stats visibly reflect the combined modifiers of its prefix and suffix (e.g., 'Infernal' prefix boosts attack, 'Colossus' suffix boosts HP and defense).",
+        "Monster names displayed in combat follow the 'Prefix Suffix' pattern (e.g., 'Ancient Elder God')."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/App.tsx",
+          "path": "frontend/src/data/monsters.ts",
           "operation": "modify",
-          "description": "Before navigating from the dungeon screen back to character select, ensure the character's current HP is persisted to the backend via the setCharacterHp mutation. When re-entering the dungeon, verify the character's HP is loaded from the backend rather than being reset to max HP."
-        },
-        {
-          "path": "frontend/src/hooks/useLocalCharacter.ts",
-          "operation": "modify",
-          "description": "Ensure the hook correctly retrieves and uses the currentHP value from the backend character data when initializing or updating the local character state. Do not override currentHP with maxHP unless explicitly healing to full."
-        },
-        {
-          "path": "frontend/src/components/CharacterSelectScreen.tsx",
-          "operation": "modify",
-          "description": "Display each character's currentHP (from backend) in the health bar instead of defaulting to maxHP. Ensure the health bar reflects the actual persisted HP value when a character is selected."
-        },
-        {
-          "path": "frontend/src/components/DungeonRunScreen.tsx",
-          "operation": "modify",
-          "description": "After combat simulation completes, save the final currentHP value to the backend using the setCharacterHp mutation before calling the completion or death callback. Ensure HP changes during combat are persisted."
+          "description": "Expand the existing monster data structure to include at least 10 prefixes (e.g., 'Ancient', 'Infernal', 'Cursed', 'Withered', 'Verdant', 'Dread', 'Spectral', 'Molten', 'Forsaken', 'Elder') and 10 suffixes (e.g., 'Goblin', 'Warlord', 'Shade', 'Colossus', 'Serpent', 'Revenant', 'Wraith', 'Titan', 'Fiend', 'Elder God'). Each prefix and suffix must include a stat modifier object with multipliers or flat bonuses for HP, attack, and defense. Update or replace the generateMonsterName function to select a random prefix and suffix, combine them into a 'Prefix Suffix' name pattern, and return both the name and the resolved final stats (base template stats modified by both prefix and suffix modifiers). Ensure the function produces unique combinations on each call."
         }
       ]
     },
     {
       "id": "REQ-2",
-      "summary": "Set player attack tick rate to 12 ticks by default and implement enemy attack tick rate scaling (level 1 = 21 ticks, scaling down 1 tick per 5 levels)",
+      "summary": "Implement additive XP formula based on monster level and equal per-point bonuses for HP, attack, and defense stats",
       "acceptanceCriteria": [
-        "Player character attacks exactly once every 12 combat ticks",
-        "A level 1 enemy attacks once every 21 ticks",
-        "A level 5 enemy attacks once every 20 ticks",
-        "A level 10 enemy attacks once every 19 ticks",
-        "Tick scaling formula is: enemyAttackTicks = 21 - Math.floor((enemyLevel - 1) / 5)",
-        "Player attack interval constant is named clearly (e.g., PLAYER_ATTACK_INTERVAL = 12) in combatEngine.ts",
-        "No other combat logic or game behavior is changed"
+        "The XP formula is clearly additive: Final XP = baseXP(level) + (hpBonus * monsterHP) + (atkBonus * monsterAttack) + (defBonus * monsterDefense), where hpBonus, atkBonus, and defBonus are equal constants.",
+        "A high-defense 'Ancient Elder God' awards significantly more XP than a low-stat 'Weak Goblin' at the same monster level.",
+        "XP reward shown in the combat log and DungeonRunScreen reflects the new formula.",
+        "The bonus constants are tuned so stat contributions are meaningful but not so extreme that they overshadow level-based scaling."
       ],
       "file_operations": [
         {
           "path": "frontend/src/engine/combatEngine.ts",
           "operation": "modify",
-          "description": "Define a named constant PLAYER_ATTACK_INTERVAL = 12 at the top of the file. Update the combat simulation loop to ensure the player attacks only once every 12 ticks (using a tick counter modulo 12). Define a function calculateEnemyAttackInterval(enemyLevel: number): number that returns 21 - Math.floor((enemyLevel - 1) / 5). For each enemy, calculate their attack interval using this function and ensure they attack only when their tick counter reaches their interval. Reset each entity's tick counter after they attack. Do not modify damage calculations, loot drops, XP formulas, or any other combat mechanics."
+          "description": "Replace the existing XP reward calculation with an additive formula: Final XP = baseXP(monsterLevel) + (hpBonus * monsterHP) + (atkBonus * monsterAttack) + (defBonus * monsterDefense), where hpBonus, atkBonus, and defBonus are equal constants (same per-point value). Define these constants at the top of the file with a comment explaining the additive scaling. Ensure the formula is applied in the XP reward logic so that monsters with higher HP, attack, and defense stats award significantly more XP than low-stat monsters at the same level. Tune the bonus constants so stat contributions are meaningful but balanced with level-based scaling. The calculated XP should be returned in the CombatResult and displayed in the combat log."
+        }
+      ]
+    },
+    {
+      "id": "REQ-3",
+      "summary": "Integrate procedural monster generation into dungeon runs, displaying generated monster names and stats in combat",
+      "acceptanceCriteria": [
+        "Each dungeon run generates a new monster with a procedurally combined name and stats.",
+        "The monster's full 'Prefix Suffix' name is shown in the combat log.",
+        "The combat engine receives the generated monster's final stats (HP, attack, defense) and uses them for the fight.",
+        "XP awarded at the end of the run reflects the generated monster's actual stats via the new additive formula."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/components/DungeonSelectScreen.tsx",
+          "operation": "modify",
+          "description": "Update the dungeon start logic to call the new procedural monster generation function from frontend/src/data/monsters.ts when a dungeon run begins. Pass the selected monster level to the generation function. Store the generated monster's name and final stats (HP, attack, defense) and pass them to the DungeonRunScreen component via props or state, replacing any existing monster selection logic. Ensure the generated monster data flows into the combat engine for the fight."
+        },
+        {
+          "path": "frontend/src/components/DungeonRunScreen.tsx",
+          "operation": "modify",
+          "description": "Update the component to receive and use the procedurally generated monster data (name and stats) passed from DungeonSelectScreen. Display the generated monster's full 'Prefix Suffix' name in the combat log (e.g., 'You are battling an Infernal Titan'). Pass the generated monster's final HP, attack, and defense stats to the combat engine. Ensure the XP reward displayed at the end of the run reflects the new additive formula applied to the generated monster's actual stats."
         }
       ]
     }

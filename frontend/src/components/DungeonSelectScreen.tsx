@@ -4,12 +4,13 @@ import { LocalCharacter } from '../types/game';
 import { GeneratedItem } from '../engine/lootGenerator';
 import { ItemCard } from './ItemTooltip';
 import { calculateDropRate, getMaxMonsterLevel } from '../engine/combatEngine';
+import { generateMonster, GeneratedMonster } from '../data/monsters';
 
 type DungeonMode = 'Catacombs' | 'Depths' | 'AscensionTrial';
 
 interface DungeonSelectScreenProps {
   character: LocalCharacter;
-  onStartDungeon: (mode: DungeonMode, level: number) => void;
+  onStartDungeon: (mode: DungeonMode, level: number, monsters?: GeneratedMonster[]) => void;
   pendingLoot: GeneratedItem[];
   onClearPendingLoot: () => void;
 }
@@ -89,11 +90,17 @@ export default function DungeonSelectScreen({
   const handleStartCombat = () => {
     if (levelError) return;
     const level = Math.max(minLevel, Math.min(maxLevel, monsterLevel));
-    onStartDungeon('Catacombs', level);
+    // Generate the number of monsters for this dungeon level (1-3)
+    const numMonsters = Math.min(3, 1 + Math.floor(level / 5));
+    const monsters = Array.from({ length: numMonsters }, () => generateMonster());
+    onStartDungeon('Catacombs', level, monsters);
   };
 
   const handleStartAscension = () => {
-    onStartDungeon('AscensionTrial', character.level + 5);
+    const ascensionLevel = character.level + 5;
+    const numMonsters = Math.min(3, 1 + Math.floor(ascensionLevel / 5));
+    const monsters = Array.from({ length: numMonsters }, () => generateMonster());
+    onStartDungeon('AscensionTrial', ascensionLevel, monsters);
   };
 
   const handleClearLoot = () => {
@@ -138,113 +145,123 @@ export default function DungeonSelectScreen({
               <ItemCard key={item.id} item={item} />
             ))}
           </div>
+          <button
+            onClick={handleClearLoot}
+            className="mt-3 w-full text-sm text-center text-muted hover:text-foreground transition-colors"
+          >
+            Dismiss all
+          </button>
         </div>
       )}
 
-      {/* Current HP warning */}
-      {currentHp < maxHp && (
-        <div className="flex items-start gap-3 bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-4">
-          <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-yellow-300">Not at full health</p>
-            <p className="text-xs text-muted mt-0.5">
-              You will enter combat with {currentHp}/{maxHp} HP. Consider
-              waiting for health regeneration before fighting.
-            </p>
-          </div>
+      {/* HP Warning */}
+      {currentHp < maxHp * 0.3 && (
+        <div className="flex items-center gap-2 bg-red-900/20 border border-red-700/40 rounded-lg px-4 py-2 text-red-400 text-sm">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span>Low HP! Consider resting before entering the dungeon.</span>
         </div>
       )}
 
-      {/* Monster Level Input */}
-      <div className="bg-surface-1 border border-border rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Sword className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Monster Level</h3>
+      {/* Dungeon Card */}
+      <div className="bg-surface-2 border border-border rounded-xl p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Sword className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-display font-semibold text-foreground">The Catacombs</h3>
+            <p className="text-xs text-muted">Standard dungeon run — fight monsters, earn XP and loot</p>
+          </div>
         </div>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted mb-1.5 block">
-              Enter level (1 – {maxLevel})
-            </label>
-            <input
-              type="number"
-              min={minLevel}
-              max={maxLevel}
-              value={inputValue}
-              onChange={handleLevelChange}
-              onBlur={handleLevelBlur}
-              placeholder={`1 to ${maxLevel}`}
-              className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-foreground placeholder:text-muted focus:outline-none focus:border-primary transition-colors"
-            />
+        {/* Monster Level Selector */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-foreground">Monster Level</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={minLevel}
+                max={maxLevel}
+                value={inputValue}
+                onChange={handleLevelChange}
+                onBlur={handleLevelBlur}
+                className="w-16 text-center bg-surface-1 border border-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
           </div>
 
-          {/* Slider */}
           <input
             type="range"
             min={minLevel}
             max={maxLevel}
-            value={Math.max(minLevel, Math.min(maxLevel, monsterLevel || minLevel))}
+            value={monsterLevel}
             onChange={handleSliderChange}
             className="w-full accent-primary"
           />
 
+          <div className="flex items-center justify-between text-xs text-muted">
+            <span>Lv. {minLevel}</span>
+            <span>Lv. {maxLevel}</span>
+          </div>
+
           {levelError && (
-            <div className="flex items-start gap-2 text-red-400 text-sm">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="flex items-center gap-2 text-red-400 text-xs">
+              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span>{levelError}</span>
             </div>
           )}
-
-          {/* Static XP & Drop Rate Info */}
-          {canStartCombat && (
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="bg-surface-2 rounded-lg p-3 text-center">
-                <div className="text-xs text-muted mb-1 uppercase tracking-wide">XP Rate</div>
-                <div className={`text-sm font-semibold ${xpInfo.color}`}>{xpInfo.label}</div>
-              </div>
-              <div className="bg-surface-2 rounded-lg p-3 text-center">
-                <div className="text-xs text-muted mb-1 uppercase tracking-wide">Drop Rate</div>
-                <div className={`text-sm font-semibold ${dropRatePercent > 0 ? 'text-foreground' : 'text-red-400'}`}>
-                  {dropRatePercent}%
-                  {dropRatePercent === 0 && (
-                    <span className="block text-xs font-normal text-red-400/80 mt-0.5">monster too low level</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <button
-            onClick={handleStartCombat}
-            disabled={!canStartCombat}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Flame className="w-4 h-4" />
-            Start Combat
-          </button>
         </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="flex items-center gap-2 bg-surface-1 rounded-lg px-3 py-2">
+            <Zap className="w-3.5 h-3.5 text-yellow-400" />
+            <span className={xpInfo.color}>{xpInfo.label}</span>
+          </div>
+          <div className="flex items-center gap-2 bg-surface-1 rounded-lg px-3 py-2">
+            <Gift className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-muted">{dropRatePercent}% drop rate</span>
+          </div>
+        </div>
+
+        <button
+          onClick={handleStartCombat}
+          disabled={!canStartCombat}
+          className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Enter Dungeon
+        </button>
       </div>
 
       {/* Ascension Trial */}
-      <div className="bg-surface-1 border border-border rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-5 h-5 text-yellow-400" />
-          <h3 className="font-semibold text-foreground">Ascension Trial</h3>
-          <span className="text-xs text-muted ml-auto">
-            Level {character.level + 5} challenge
-          </span>
+      <div className="bg-surface-2 border border-border rounded-xl p-5 space-y-3 opacity-90">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+            <Flame className="w-5 h-5 text-yellow-400" />
+          </div>
+          <div>
+            <h3 className="font-display font-semibold text-foreground">Ascension Trial</h3>
+            <p className="text-xs text-muted">Face monsters 5 levels above you — high risk, high reward</p>
+          </div>
         </div>
-        <p className="text-sm text-muted mb-4">
-          Face a powerful enemy 5 levels above you. Rewards are greatly increased but the
-          challenge is severe.
-        </p>
+
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="flex items-center gap-2 bg-surface-1 rounded-lg px-3 py-2">
+            <Zap className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="text-yellow-400">Bonus XP (+50%)</span>
+          </div>
+          <div className="flex items-center gap-2 bg-surface-1 rounded-lg px-3 py-2">
+            <Gift className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-muted">6% drop rate</span>
+          </div>
+        </div>
+
         <button
           onClick={handleStartAscension}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-yellow-600/20 border border-yellow-600/40 text-yellow-300 font-medium hover:bg-yellow-600/30 transition-all active:scale-95"
+          className="w-full py-2.5 rounded-lg bg-yellow-600/80 text-white font-semibold text-sm hover:bg-yellow-600 transition-colors"
         >
-          <Zap className="w-4 h-4" />
-          Begin Ascension Trial
+          Begin Ascension (Lv. {character.level + 5})
         </button>
       </div>
     </div>

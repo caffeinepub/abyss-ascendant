@@ -5,37 +5,72 @@ export interface MonsterTemplate {
   baseHp: number;
   baseAttack: number;
   baseDefense: number;
-  xpReward: number;
-  lootWeight: number; // relative weight for loot drops
-  ticksBetweenAttacks: number; // how many ticks between each monster attack
+  lootWeight: number;
+  ticksBetweenAttacks: number;
 }
 
-// Prefix and suffix pools for monster name generation
-const MONSTER_PREFIXES = [
-  'Vile', 'Rotting', 'Ancient', 'Cursed', 'Feral',
-  'Festering', 'Hungering', 'Corrupted', 'Blighted', 'Savage',
-  'Wretched', 'Forsaken', 'Twisted', 'Dread', 'Infernal',
-];
-
-const MONSTER_SUFFIXES = [
-  'Brute', 'Warden', 'Scout', 'Shaman', 'Ravager',
-  'Specter', 'Champion', 'Marauder', 'Stalker', 'Berserker',
-];
-
-/**
- * Generates a unique display name for a monster by combining a random prefix
- * and/or suffix with the base monster type name.
- */
-export function generateMonsterDisplayName(baseName: string): string {
-  const prefix = MONSTER_PREFIXES[Math.floor(Math.random() * MONSTER_PREFIXES.length)];
-  const suffix = MONSTER_SUFFIXES[Math.floor(Math.random() * MONSTER_SUFFIXES.length)];
-  // Always use both prefix and suffix for maximum variety
-  return `${prefix} ${baseName} ${suffix}`;
+export interface StatModifier {
+  hp: number;
+  attack: number;
+  defense: number;
 }
 
-// All monsters have base HP of ~25-35 so level 1 encounters are fair.
-// HP scales ~15% per level above 1 in combatEngine (so level 10 ≈ 2.35x base).
-// Monsters are differentiated by attack speed, attack power, and defense rather than raw HP.
+export interface MonsterPrefix {
+  name: string;
+  modifiers: StatModifier;
+}
+
+export interface MonsterSuffix {
+  name: string;
+  modifiers: StatModifier;
+}
+
+export interface GeneratedMonster {
+  name: string;
+  emoji: string;
+  baseHp: number;
+  baseAttack: number;
+  baseDefense: number;
+  lootWeight: number;
+  ticksBetweenAttacks: number;
+}
+
+// ─── Prefix pool (10+) ───────────────────────────────────────────────────────
+// Each prefix adds flat bonuses to the base monster stats.
+// Positive values boost a stat; negative values reduce it.
+export const MONSTER_PREFIXES: MonsterPrefix[] = [
+  { name: 'Ancient',   modifiers: { hp: 12, attack: 4,  defense: 6  } },
+  { name: 'Infernal',  modifiers: { hp: 4,  attack: 10, defense: 2  } },
+  { name: 'Cursed',    modifiers: { hp: 6,  attack: 6,  defense: 4  } },
+  { name: 'Withered',  modifiers: { hp: -4, attack: 2,  defense: -2 } },
+  { name: 'Verdant',   modifiers: { hp: 8,  attack: 2,  defense: 5  } },
+  { name: 'Dread',     modifiers: { hp: 5,  attack: 8,  defense: 3  } },
+  { name: 'Spectral',  modifiers: { hp: 2,  attack: 7,  defense: 1  } },
+  { name: 'Molten',    modifiers: { hp: 6,  attack: 9,  defense: 4  } },
+  { name: 'Forsaken',  modifiers: { hp: 10, attack: 5,  defense: 7  } },
+  { name: 'Elder',     modifiers: { hp: 15, attack: 8,  defense: 10 } },
+  { name: 'Vile',      modifiers: { hp: 3,  attack: 6,  defense: 2  } },
+  { name: 'Savage',    modifiers: { hp: 7,  attack: 7,  defense: 3  } },
+];
+
+// ─── Suffix pool (10+) ───────────────────────────────────────────────────────
+export const MONSTER_SUFFIXES: MonsterSuffix[] = [
+  { name: 'Goblin',    modifiers: { hp: -5, attack: -2, defense: -2 } },
+  { name: 'Warlord',   modifiers: { hp: 8,  attack: 8,  defense: 5  } },
+  { name: 'Shade',     modifiers: { hp: -2, attack: 5,  defense: -1 } },
+  { name: 'Colossus',  modifiers: { hp: 15, attack: 4,  defense: 10 } },
+  { name: 'Serpent',   modifiers: { hp: 4,  attack: 6,  defense: 2  } },
+  { name: 'Revenant',  modifiers: { hp: 6,  attack: 5,  defense: 4  } },
+  { name: 'Wraith',    modifiers: { hp: 2,  attack: 8,  defense: 1  } },
+  { name: 'Titan',     modifiers: { hp: 12, attack: 6,  defense: 8  } },
+  { name: 'Fiend',     modifiers: { hp: 5,  attack: 9,  defense: 3  } },
+  { name: 'Elder God', modifiers: { hp: 20, attack: 12, defense: 15 } },
+  { name: 'Berserker', modifiers: { hp: 6,  attack: 11, defense: 2  } },
+  { name: 'Stalker',   modifiers: { hp: 3,  attack: 7,  defense: 3  } },
+];
+
+// ─── Base monster type pool ───────────────────────────────────────────────────
+// These are the "body" of the monster — prefix + base + suffix = full name.
 export const MONSTER_TEMPLATES: MonsterTemplate[] = [
   {
     id: 'goblin',
@@ -44,7 +79,6 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 25,
     baseAttack: 5,
     baseDefense: 1,
-    xpReward: 15,
     lootWeight: 10,
     ticksBetweenAttacks: 3,
   },
@@ -55,7 +89,6 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 28,
     baseAttack: 7,
     baseDefense: 2,
-    xpReward: 20,
     lootWeight: 10,
     ticksBetweenAttacks: 3,
   },
@@ -66,7 +99,6 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 30,
     baseAttack: 9,
     baseDefense: 3,
-    xpReward: 30,
     lootWeight: 8,
     ticksBetweenAttacks: 4,
   },
@@ -77,7 +109,6 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 32,
     baseAttack: 11,
     baseDefense: 4,
-    xpReward: 45,
     lootWeight: 7,
     ticksBetweenAttacks: 5,
   },
@@ -88,7 +119,6 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 27,
     baseAttack: 13,
     baseDefense: 2,
-    xpReward: 55,
     lootWeight: 8,
     ticksBetweenAttacks: 2,
   },
@@ -99,7 +129,6 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 30,
     baseAttack: 15,
     baseDefense: 4,
-    xpReward: 65,
     lootWeight: 9,
     ticksBetweenAttacks: 3,
   },
@@ -110,7 +139,6 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 33,
     baseAttack: 17,
     baseDefense: 5,
-    xpReward: 80,
     lootWeight: 8,
     ticksBetweenAttacks: 4,
   },
@@ -121,7 +149,6 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 30,
     baseAttack: 20,
     baseDefense: 6,
-    xpReward: 100,
     lootWeight: 9,
     ticksBetweenAttacks: 3,
   },
@@ -132,7 +159,6 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 35,
     baseAttack: 25,
     baseDefense: 8,
-    xpReward: 150,
     lootWeight: 10,
     ticksBetweenAttacks: 5,
   },
@@ -143,8 +169,35 @@ export const MONSTER_TEMPLATES: MonsterTemplate[] = [
     baseHp: 35,
     baseAttack: 30,
     baseDefense: 10,
-    xpReward: 250,
     lootWeight: 10,
     ticksBetweenAttacks: 6,
   },
 ];
+
+/**
+ * Procedurally generates a unique monster by combining a random prefix,
+ * a random base template, and a random suffix. The final stats are the
+ * base template stats plus the flat modifiers from both prefix and suffix.
+ * Returns a GeneratedMonster with the combined name and resolved stats.
+ */
+export function generateMonster(): GeneratedMonster {
+  const template = MONSTER_TEMPLATES[Math.floor(Math.random() * MONSTER_TEMPLATES.length)];
+  const prefix = MONSTER_PREFIXES[Math.floor(Math.random() * MONSTER_PREFIXES.length)];
+  const suffix = MONSTER_SUFFIXES[Math.floor(Math.random() * MONSTER_SUFFIXES.length)];
+
+  const name = `${prefix.name} ${template.name} ${suffix.name}`;
+
+  const baseHp = Math.max(10, template.baseHp + prefix.modifiers.hp + suffix.modifiers.hp);
+  const baseAttack = Math.max(1, template.baseAttack + prefix.modifiers.attack + suffix.modifiers.attack);
+  const baseDefense = Math.max(0, template.baseDefense + prefix.modifiers.defense + suffix.modifiers.defense);
+
+  return {
+    name,
+    emoji: template.emoji,
+    baseHp,
+    baseAttack,
+    baseDefense,
+    lootWeight: template.lootWeight,
+    ticksBetweenAttacks: template.ticksBetweenAttacks,
+  };
+}

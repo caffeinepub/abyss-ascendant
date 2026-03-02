@@ -14,6 +14,7 @@ import { LocalCharacter, BaseStats, calculateUnspentStatPoints } from './types/g
 import { Character } from './backend';
 import { CombatResult } from './engine/combatEngine';
 import { GeneratedItem } from './engine/lootGenerator';
+import { GeneratedMonster } from './data/monsters';
 
 import Navigation, { NavScreen } from './components/Navigation';
 import CharacterSelectScreen from './components/CharacterSelectScreen';
@@ -47,8 +48,10 @@ function AppContent() {
   const [dungeonLevel, setDungeonLevel] = useState(1);
   const [dungeonMode, setDungeonMode] = useState<'normal' | 'hardcore'>('normal');
   const [isInDungeon, setIsInDungeon] = useState(false);
+  const [pendingMonsters, setPendingMonsters] = useState<GeneratedMonster[]>([]);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [pendingLevelUp, setPendingLevelUp] = useState(false);
+  const [isSavingHp, setIsSavingHp] = useState(false);
 
   const { data: rawCharacters = [], isLoading: charsLoading, isError: charsError, refetch: refetchChars } = useGetCharacters();
   const setCharacterHpMutation = useSetCharacterHp();
@@ -78,7 +81,7 @@ function AppContent() {
     updateBaseStats,
   } = useLocalCharacter(selectedCharacterIndex, selectedBackendChar);
 
-  // Health regen - sync to backend periodically
+  // Health regen - sync to backend periodically (silent, no query invalidation)
   const handleBackendHpSync = useCallback((newHp: number) => {
     if (selectedCharacterIndex === null || !character) return;
     setCharacterHpMutation.mutate({ characterId: selectedCharacterIndex, hp: newHp });
@@ -109,23 +112,38 @@ function AppContent() {
     setShowCharacterCreation(false);
   }, []);
 
-  const handleBackToCharacterSelect = useCallback(() => {
-    // Persist current HP to backend before navigating away so it is restored on re-entry
-    if (selectedCharacterIndex !== null && character) {
-      const hpToSave = Math.min(character.stats.currentHp, character.stats.maxHp);
-      setCharacterHpMutation.mutate({ characterId: selectedCharacterIndex, hp: hpToSave });
+  const handleBackToCharacterSelect = useCallback(async () => {
+    // Capture current values immediately to avoid stale closures
+    const charIdToSave = selectedCharacterIndex;
+    const charToSave = character;
+
+    if (charIdToSave !== null && charToSave) {
+      const hpToSave = Math.min(charToSave.stats.currentHp, charToSave.stats.maxHp);
+      setIsSavingHp(true);
+      try {
+        // Await the HP save so the backend has the correct value before we navigate away
+        await setCharacterHpMutation.mutateAsync({ characterId: charIdToSave, hp: hpToSave });
+      } catch {
+        // Even if save fails, still navigate back — don't block the user
+      } finally {
+        setIsSavingHp(false);
+      }
     }
+
+    // Navigate away only after the save has completed (or failed)
     setSelectedCharacterIndex(null);
     setCurrentScreen('character');
     setIsInDungeon(false);
     setPendingLoot([]);
+    setPendingMonsters([]);
   }, [selectedCharacterIndex, character, setCharacterHpMutation]);
 
   type DungeonMode = 'Catacombs' | 'Depths' | 'AscensionTrial';
 
-  const handleStartDungeon = useCallback((mode: DungeonMode, level: number) => {
+  const handleStartDungeon = useCallback((mode: DungeonMode, level: number, monsters?: GeneratedMonster[]) => {
     setDungeonLevel(level);
     setDungeonMode(mode === 'AscensionTrial' ? 'hardcore' : 'normal');
+    setPendingMonsters(monsters ?? []);
     setIsInDungeon(true);
   }, []);
 
@@ -136,6 +154,7 @@ function AppContent() {
     remainingHp: number
   ) => {
     setIsInDungeon(false);
+    setPendingMonsters([]);
 
     // Update local character state with post-combat values
     updateAfterDungeon(newXp, newLevel, remainingHp);
@@ -160,6 +179,7 @@ function AppContent() {
 
   const handleDungeonDeath = useCallback(() => {
     setIsInDungeon(false);
+    setPendingMonsters([]);
     setSelectedCharacterIndex(null);
     setCurrentScreen('character');
     refetchChars();
@@ -290,6 +310,7 @@ function AppContent() {
           characterId={selectedCharacterIndex}
           dungeonLevel={dungeonLevel}
           dungeonMode={dungeonMode}
+          monsters={pendingMonsters.length > 0 ? pendingMonsters : undefined}
           onComplete={handleDungeonComplete}
           onDeath={handleDungeonDeath}
         />
@@ -309,6 +330,7 @@ function AppContent() {
         currentHP={character?.stats.currentHp}
         maxHP={character?.stats.maxHp}
         onBackToCharacterSelect={handleBackToCharacterSelect}
+        isSavingHp={isSavingHp}
       />
 
       <main className="flex-1 pb-4">

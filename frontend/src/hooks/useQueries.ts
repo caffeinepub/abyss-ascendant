@@ -69,7 +69,6 @@ export function useDeleteCharacter() {
 
 export function useSetCharacterHp() {
   const { actor } = useActor();
-  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ characterId, hp }: { characterId: number; hp: number }) => {
@@ -81,9 +80,11 @@ export function useSetCharacterHp() {
         throw new Error(`Failed to set HP: ${result.err}`);
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['characters'] });
-    },
+    // Intentionally NOT invalidating 'characters' query here.
+    // HP syncs happen frequently (regen ticks) and invalidating the cache on every
+    // sync would cause useLocalCharacter to re-initialize from the backend, overwriting
+    // the live local HP state. The characters list is refreshed explicitly when needed
+    // (e.g., after navigating back to character select via refetchChars).
   });
 }
 

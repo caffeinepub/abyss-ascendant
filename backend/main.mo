@@ -413,4 +413,24 @@ actor {
       case (null) { Runtime.trap("Item image does not exist") };
     };
   };
+
+  /// Load a specific character by its ID.
+  /// Applies access control and returns character data only if found.
+  public query ({ caller }) func getCharacter(characterId : CharacterId) : async ?Character {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      return null;
+    };
+    switch (characters.get(caller)) {
+      case (null) { null };
+      case (?characterSlots) {
+        let maybeCharacter = characterSlots.toArray().find(
+          func(slot) { slot.id == characterId }
+        );
+        switch (maybeCharacter) {
+          case (null) { null };
+          case (?slot) { ?slot.character };
+        };
+      };
+    };
+  };
 };

@@ -1,30 +1,35 @@
 {
   "schemaVersion": "1.0.0",
   "projectStateVersion": 3,
-  "summary": "Abyss Ascendant — a dungeon RPG with character selection, combat tick system, and monster encounters. Currently fixing HP preservation on character select and attack tick rate defaults.",
+  "summary": "RPG game project featuring procedural monster generation with prefix/suffix combinations, stat-based additive XP scaling, and character select system.",
   "architectural_notes": [
-    "Combat uses a tick-based system; player default is 12 ticks per attack, enemies start at 21 ticks (level 1) and decrease by 1 tick every 5 levels",
-    "Only tackle explicitly requested changes — do not add or remove features between updates without user instruction"
+    "XP rewards scale additively: base XP (monster level) + equal stat bonuses (HP, attack, defense)",
+    "Monsters generated procedurally via prefix+suffix combinations; stats vary based on modifiers"
   ],
-  "known_issues": [
-    "Character HP resets to max when backing out to character select screen instead of preserving current HP",
-    "Player was attacking every tick instead of every 12 ticks — tick rate was changed without user request"
-  ],
-  "isFixRequest": true,
+  "known_issues": [],
+  "isFixRequest": false,
   "existing_features": [
     {
-      "id": "feature-when-a-player-backs-out-to-the-character-select-screen-and-re-selects-their-character-the-character-s-current-hp-must-be-preserved-exactly-as-it-was-it-must-not-reset-to-max-hp-the-hp-value-should-be-saved-either-to-backend-or-persistent-local-state-before-navigating-away-from-the-dungeon-game-screen-and-restored-when-re-entering-with-that-character",
-      "title": "When a player backs out to the character select screen and re-selects their character, the character's current HP must be preserved exactly as it was — it must NOT reset to max HP. The HP value should be saved (either to backend or persistent local state) before navigating away from the dungeon/game screen and restored when re-entering with that character.",
+      "id": "feature-expand-the-monster-roster-in-frontend-src-data-monsters-ts-to-include-a-diverse-set-of-prefix-and-suffix-pools-e-g-prefixes-ancient-infernal-cursed-withered-verdant-dread-spectral-molten-forsaken-elder-suffixes-goblin-warlord-shade-colossus-serpent-revenant-wraith-titan-fiend-elder-god-each-prefix-and-suffix-must-carry-a-stat-modifier-object-multipliers-or-flat-bonuses-for-hp-attack-and-defense-so-that-the-generated-monster-s-final-stats-are-a-combination-of-its-base-template-stats-and-both-the-prefix-and-suffix-modifiers-the-generatemonstername-or-equivalent-utility-must-produce-a-unique-monster-name-and-resolved-final-stats-each-time-it-is-called",
+      "title": "Expand the monster roster in frontend/src/data/monsters.ts to include a diverse set of prefix and suffix pools (e.g., prefixes: 'Ancient', 'Infernal', 'Cursed', 'Withered', 'Verdant', 'Dread', 'Spectral', 'Molten', 'Forsaken', 'Elder'; suffixes: 'Goblin', 'Warlord', 'Shade', 'Colossus', 'Serpent', 'Revenant', 'Wraith', 'Titan', 'Fiend', 'Elder God'). Each prefix and suffix must carry a stat modifier object (multipliers or flat bonuses for HP, attack, and defense) so that the generated monster's final stats are a combination of its base template stats and both the prefix and suffix modifiers. The `generateMonsterName` (or equivalent) utility must produce a unique monster name and resolved final stats each time it is called.",
       "reqIds": [
         "REQ-1"
       ],
       "version": 1
     },
     {
-      "id": "feature-fix-the-player-attack-tick-rate-so-the-player-attacks-every-12-ticks-by-default-not-every-tick-additionally-set-level-1-enemies-to-attack-every-21-ticks-scaling-down-by-1-tick-every-5-enemy-levels-level-5-20-ticks-level-10-19-ticks-level-15-18-ticks-etc-these-values-must-be-defined-as-named-constants-in-the-combat-engine-and-must-not-be-changed-unless-explicitly-requested",
-      "title": "Fix the player attack tick rate so the player attacks every 12 ticks by default (not every tick). Additionally, set level 1 enemies to attack every 21 ticks, scaling down by 1 tick every 5 enemy levels (level 5 = 20 ticks, level 10 = 19 ticks, level 15 = 18 ticks, etc.). These values must be defined as named constants in the combat engine and must not be changed unless explicitly requested.",
+      "id": "feature-update-the-combat-xp-reward-calculation-in-frontend-src-engine-combatengine-ts-to-use-an-additive-formula-final-xp-base-xp-derived-from-monster-level-flat-bonus-per-hp-point-flat-bonus-per-attack-point-flat-bonus-per-defense-point-all-three-stat-bonuses-must-contribute-equally-same-per-point-bonus-rate-this-means-a-monster-with-high-hp-high-attack-and-high-defense-awards-significantly-more-xp-than-a-low-stat-monster-of-the-same-level",
+      "title": "Update the combat XP reward calculation in frontend/src/engine/combatEngine.ts to use an additive formula: Final XP = base XP (derived from monster level) + flat bonus per HP point + flat bonus per attack point + flat bonus per defense point. All three stat bonuses must contribute equally (same per-point bonus rate). This means a monster with high HP, high attack, AND high defense awards significantly more XP than a low-stat monster of the same level.",
       "reqIds": [
         "REQ-2"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-dungeonrunscreen-and-dungeonselectscreen-to-use-the-new-procedural-monster-generation-system-when-a-dungeon-run-begins-generate-a-monster-using-the-prefix-suffix-system-at-the-selected-monster-level-then-run-combat-against-that-procedurally-generated-monster-with-its-combined-stats-display-the-generated-monster-s-full-name-e-g-infernal-titan-in-the-combat-log-and-any-monster-stat-previews",
+      "title": "Update DungeonRunScreen and DungeonSelectScreen to use the new procedural monster generation system. When a dungeon run begins, generate a monster using the prefix+suffix system at the selected monster level, then run combat against that procedurally generated monster (with its combined stats). Display the generated monster's full name (e.g., 'Infernal Titan') in the combat log and any monster stat previews.",
+      "reqIds": [
+        "REQ-3"
       ],
       "version": 1
     }
@@ -32,13 +37,13 @@
   "new_feature_requests": [
     {
       "id": "AR-1",
-      "summary": "HP preservation on character select: save and restore character's current HP when backing out and re-entering",
+      "summary": "Procedural monster generation using prefix+suffix combinations with stats influenced by modifiers",
       "reqIds": [],
       "status": "pending"
     },
     {
       "id": "AR-2",
-      "summary": "Attack tick rate fix: player attacks every 12 ticks by default; level 1 enemies attack every 21 ticks, scaling down by 1 tick every 5 enemy levels",
+      "summary": "Additive XP formula: base XP (from monster level) + equal flat bonuses for HP, attack, and defense stats",
       "reqIds": [],
       "status": "pending"
     }

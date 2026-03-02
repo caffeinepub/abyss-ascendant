@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LocalCharacter } from '../types/game';
 import { simulateCombat, CombatResult } from '../engine/combatEngine';
 import { GeneratedItem } from '../engine/lootGenerator';
+import { GeneratedMonster } from '../data/monsters';
 import { useSubmitDungeonResult, useSetCharacterHp } from '../hooks/useQueries';
 import { calculateLevel } from '../types/game';
 import { Loader2, Sword, Shield, Skull, Trophy, ChevronRight, AlertCircle } from 'lucide-react';
@@ -12,6 +13,7 @@ interface DungeonRunScreenProps {
   characterId: number;
   dungeonLevel: number;
   dungeonMode: 'normal' | 'hardcore';
+  monsters?: GeneratedMonster[];
   onComplete: (result: CombatResult, newXp: number, newLevel: number, remainingHp: number) => void;
   onDeath: () => void;
 }
@@ -23,6 +25,7 @@ export default function DungeonRunScreen({
   characterId,
   dungeonLevel,
   dungeonMode,
+  monsters,
   onComplete,
   onDeath,
 }: DungeonRunScreenProps) {
@@ -62,7 +65,8 @@ export default function DungeonRunScreen({
       },
       dungeonLevel,
       dungeonMode === 'hardcore',
-      character.realm
+      character.realm,
+      monsters
     );
 
     setCombatResult(result);
@@ -128,6 +132,9 @@ export default function DungeonRunScreen({
   const isDeath = combatResult ? !combatResult.victory : false;
   const isSoftcoreDeath = isDeath && character.realm === 'Softcore';
 
+  // Derive the first monster's name for the header (if available)
+  const firstMonsterName = monsters && monsters.length > 0 ? monsters[0].name : null;
+
   return (
     <div className="min-h-screen bg-surface-1 flex flex-col items-center justify-start p-4 pt-8">
       <div className="w-full max-w-2xl">
@@ -138,6 +145,9 @@ export default function DungeonRunScreen({
           </h1>
           <p className="text-muted-foreground text-sm">
             {character.name} — {character.realm}
+            {firstMonsterName && (
+              <span className="ml-2 text-accent">vs {firstMonsterName}</span>
+            )}
           </p>
         </div>
 
@@ -154,7 +164,7 @@ export default function DungeonRunScreen({
                   line.includes('slain') || line.includes('dead') ? 'text-red-400' :
                   line.includes('XP') ? 'text-accent' :
                   line.includes('Loot') ? 'text-purple-400' :
-                  line.startsWith('Entering') || line.startsWith('Encountered') || line.startsWith('Dungeon') ? 'text-primary font-semibold' :
+                  line.startsWith('Entering') || line.startsWith('You are battling') || line.startsWith('Dungeon') ? 'text-primary font-semibold' :
                   'text-foreground/80'
                 }`}
               >

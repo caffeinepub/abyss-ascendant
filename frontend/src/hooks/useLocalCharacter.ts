@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { LocalCharacter, BaseStats, calculateAvailableAbilityPoints, calculateMaxHp, calculateUnspentStatPoints } from '../types/game';
 import { GeneratedItem, generateStarterEquipment } from '../engine/lootGenerator';
 import { Character } from '../backend';
@@ -54,7 +54,8 @@ function computeBonusHpFromItems(equippedItems: GeneratedItem[]): number {
 function buildLocalCharacter(
   id: number,
   backendChar: Character,
-  stored: StoredCharacterData | null
+  stored: StoredCharacterData | null,
+  overrideCurrentHp?: number
 ): LocalCharacter {
   const level = Number(backendChar.level);
   const xp = Number(backendChar.xp);
@@ -67,9 +68,11 @@ function buildLocalCharacter(
   const bonusHp = computeBonusHpFromItems(equippedItems);
   const maxHp = calculateMaxHp(vit, bonusHp);
 
-  // Use backend-persisted currentHP
+  // Use override HP if provided (preserves live local HP across backend re-fetches),
+  // otherwise fall back to the backend-persisted currentHP on initial load.
   const backendCurrentHp = Number(backendChar.advancedStats.currentHP);
-  const currentHp = Math.min(Math.max(1, backendCurrentHp), maxHp);
+  const rawHp = overrideCurrentHp !== undefined ? overrideCurrentHp : backendCurrentHp;
+  const currentHp = Math.min(Math.max(1, rawHp), maxHp);
 
   const critChance = Number(backendChar.advancedStats.critChance) || 5;
   const critPower = Number(backendChar.advancedStats.critPower) || 50;
@@ -81,8 +84,8 @@ function buildLocalCharacter(
   const availableAbilityPoints = calculateAvailableAbilityPoints(level);
   const abilities = stored?.abilities || [];
 
-  let inventory = stored?.inventory || [];
-  let stash = stored?.stash || [];
+  const inventory = stored?.inventory || [];
+  const stash = stored?.stash || [];
 
   if (!stored) {
     // New character - give starter equipment
@@ -95,7 +98,7 @@ function buildLocalCharacter(
       abilityPointsInitialized: true,
     };
     saveStoredData(id, newStored);
-    return buildLocalCharacter(id, backendChar, newStored);
+    return buildLocalCharacter(id, backendChar, newStored, overrideCurrentHp);
   }
 
   const baseStats: BaseStats = { str, dex, int: int_, vit };
@@ -165,14 +168,39 @@ export function useLocalCharacter(
 ): UseLocalCharacterReturn {
   const [character, setCharacter] = useState<LocalCharacter | null>(null);
 
+  // Track the last characterId we initialized for, so we can detect a genuine
+  // character switch vs. a background re-fetch of the same character.
+  const initializedForIdRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (characterId === null || !backendChar) {
       setCharacter(null);
+      initializedForIdRef.current = null;
       return;
     }
-    const stored = loadStoredData(characterId);
-    const local = buildLocalCharacter(characterId, backendChar, stored);
-    setCharacter(local);
+
+    const isNewCharacter = initializedForIdRef.current !== characterId;
+
+    if (isNewCharacter) {
+      // First load for this character — use backend HP as the authoritative source
+      initializedForIdRef.current = characterId;
+      const stored = loadStoredData(characterId);
+      const local = buildLocalCharacter(characterId, backendChar, stored);
+      setCharacter(local);
+    } else {
+      // Same character, backend data refreshed (e.g. after submitDungeonResult or spendStatPoints).
+      // Preserve the live local HP so a background re-fetch doesn't reset it.
+      setCharacter(prev => {
+        if (!prev) {
+          const stored = loadStoredData(characterId);
+          return buildLocalCharacter(characterId, backendChar, stored);
+        }
+        // Keep the current live HP; only update fields that come from the backend
+        // (level, xp, stat points, base stats) which may have changed.
+        const stored = loadStoredData(characterId);
+        return buildLocalCharacter(characterId, backendChar, stored, prev.stats.currentHp);
+      });
+    }
   }, [characterId, backendChar]);
 
   const updateHp = useCallback((newHp: number) => {

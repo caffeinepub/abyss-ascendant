@@ -1,11 +1,12 @@
 # Specification
 
 ## Summary
-**Goal:** Fix two combat bugs: HP resetting to max on character re-select, and player/enemy attack tick rates not using the correct default values.
+**Goal:** Introduce procedural monster generation using prefix+suffix combinations and update XP rewards to scale additively with monster stats.
 
 **Planned changes:**
-- Save the character's current HP to persistent state (backend or local) before navigating away from the dungeon/game screen, and restore it when the same character is re-selected on the character select screen
-- Define a named constant `PLAYER_ATTACK_INTERVAL = 12` in the combat engine so the player attacks once every 12 ticks instead of every tick
-- Define enemy attack tick rate as `21 - Math.floor((enemyLevel - 1) / 5)` ticks (level 1 = 21 ticks, level 5 = 20 ticks, level 10 = 19 ticks, etc.) using named constants in the combat engine
+- Expand `monsters.ts` with at least 10 prefixes (e.g., Ancient, Infernal, Cursed, Withered, Verdant, Dread, Spectral, Molten, Forsaken, Elder) and 10 suffixes (e.g., Goblin, Warlord, Shade, Colossus, Serpent, Revenant, Wraith, Titan, Fiend, Elder God), each carrying stat modifier objects (HP, attack, defense).
+- Add a monster generation function that combines a random prefix and suffix to produce a unique monster name and final stats (base stats + prefix modifiers + suffix modifiers).
+- Update `combatEngine.ts` XP formula to: Final XP = baseXP(level) + (equalBonus × monsterHP) + (equalBonus × monsterAttack) + (equalBonus × monsterDefense), with all three stat bonuses using the same per-point rate.
+- Update `DungeonRunScreen` and `DungeonSelectScreen` to generate a procedural monster at run start and pass its combined stats and full "Prefix Suffix" name to the combat engine and combat log.
 
-**User-visible outcome:** A character's HP is preserved when backing out to character select and re-entering, and combat timing is corrected so the player attacks every 12 ticks and enemies attack at the appropriate scaled rate based on their level.
+**User-visible outcome:** Each dungeon run now fights a uniquely named procedural monster (e.g., "Infernal Titan"), and monsters with stronger stats award noticeably more XP than weaker ones at the same level.
