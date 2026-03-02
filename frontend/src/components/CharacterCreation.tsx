@@ -5,6 +5,8 @@ import {
   useDeleteCharacter,
   CharacterLimitReachedError,
 } from '../hooks/useQueries';
+import { generateStarterEquipment } from '../engine/lootGenerator';
+import { saveStarterEquipmentForCharacter } from '../hooks/useLocalCharacter';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,6 +82,10 @@ export default function CharacterCreation({
         int: BigInt(statPoints.int),
         vit: BigInt(statPoints.vit),
       });
+
+      // Generate and immediately equip starter gear
+      const { weapon, armor } = generateStarterEquipment();
+      saveStarterEquipmentForCharacter(characterId, weapon, armor);
 
       onCharacterCreated(characterId);
     } catch (err) {

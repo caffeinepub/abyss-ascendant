@@ -12,10 +12,17 @@ export interface BaseStats {
 export interface CharacterStats extends BaseStats {
   maxHp: number;
   currentHp: number;
-  attack: number;
-  defense: number;
   critChance: number;
   critPower: number;
+}
+
+export interface CombatResult {
+  victory: boolean;
+  log: string[];
+  xpEarned: number;
+  loot: GeneratedItem[];
+  remainingHp: number;
+  monstersDefeated: number;
 }
 
 export type Realm = 'Softcore' | 'Hardcore';
@@ -27,12 +34,10 @@ export interface LocalCharacter {
   realm: Realm;
   level: number;
   xp: number;
-  season: number;
   status: CharacterStatus;
   stats: CharacterStats;
   baseStats: BaseStats;
   abilities: string[];
-  equippedAbilities: string[];
   equippedItems: GeneratedItem[];
   inventory: GeneratedItem[];
   stash: GeneratedItem[];

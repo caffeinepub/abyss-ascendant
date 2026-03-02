@@ -1,58 +1,62 @@
 {
   "kind": "build_request",
-  "title": "Fix 'Enter The Realm' button — dead click handler in CharacterSelectScreen",
-  "priority": "high",
+  "title": "Fix HP preservation on character select and attack tick rate defaults",
+  "priority": "normal",
   "requirements": [
     {
-      "id": "REQ-75",
-      "text": "In CharacterSelectScreen.tsx, audit the 'Enter The Realm' button's onClick handler end-to-end. Identify and fix every reason the button produces zero feedback and does not navigate when clicked. Specifically: (1) confirm the button is not conditionally disabled or rendered without an onClick; (2) confirm the handler calls the onSelectCharacter (or equivalent) prop with the selected character's ID; (3) confirm no outer element is swallowing the click event (e.g. a pointer-events-none overlay or a stopPropagation call); (4) confirm the selected character state is non-null at the time the button is clicked so the ID passed is valid; (5) remove any guard or early-return that silently prevents the callback from firing.",
-      "target": "frontend",
+      "id": "REQ-1",
+      "text": "When a player backs out to the character select screen and re-selects their character, the character's current HP must be preserved exactly as it was — it must NOT reset to max HP. The HP value should be saved (either to backend or persistent local state) before navigating away from the dungeon/game screen and restored when re-entering with that character.",
+      "target": "both",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-user-focus"
         ],
         "quotes": [
-          "Button is still dead"
+          "If I back out of the game to the character select screen my characters life is still going back to 20/max no matter how much life I had before going back to the character select screen. This needs to be fixed.",
+          "It should preserve whatever HP the character was at."
         ]
       },
       "acceptanceCriteria": [
-        "Clicking 'Enter The Realm' with a character highlighted produces an immediate navigation response — no blank screen, no spinner, no silence.",
-        "The onSelectCharacter callback (or equivalent prop) is invoked with the correct character ID on every click.",
-        "The button is never silently disabled or pointer-events-blocked when a character is selected.",
-        "No click event is swallowed by a parent element.",
-        "After the callback fires, the app transitions to the character sheet / dungeon select screen without requiring an additional user action."
+        "Player enters a dungeon run with, e.g., 45/100 HP",
+        "Player backs out to the character select screen",
+        "Player re-selects the same character",
+        "The character's HP displays as 45/100, not 100/100 or 20/max",
+        "HP preservation works consistently across multiple back-and-forth navigations"
       ]
     },
     {
-      "id": "REQ-76",
-      "text": "In App.tsx, audit the onSelectCharacter callback (or equivalent) that is passed as a prop to CharacterSelectScreen. Verify: (1) the callback is defined as a stable function (useCallback or equivalent) and is not undefined at render time; (2) it correctly writes the selected character's ID into App-level state (e.g. activeCharacterId); (3) after setting the ID it immediately updates the routing state to transition to the character sheet / dungeon select screen; (4) no intermediate loading flag, isLoading guard, or conditional render silently blocks the screen transition after the callback fires; (5) if any such guard exists, ensure it evaluates to false (i.e. not blocking) by the time the callback completes.",
+      "id": "REQ-2",
+      "text": "Fix the player attack tick rate so the player attacks every 12 ticks by default (not every tick). Additionally, set level 1 enemies to attack every 21 ticks, scaling down by 1 tick every 5 enemy levels (level 5 = 20 ticks, level 10 = 19 ticks, level 15 = 18 ticks, etc.). These values must be defined as named constants in the combat engine and must not be changed unless explicitly requested.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-user-focus"
         ],
         "quotes": [
-          "Button is still dead"
+          "I'm attacking every tick. I thought we had this set to 12 ticks.",
+          "Make player default 12 ticks. Make level 1 enemy 21 ticks. Scale 1 lower on ticks for enemies every 5 levels."
         ]
       },
       "acceptanceCriteria": [
-        "onSelectCharacter is never undefined when CharacterSelectScreen renders.",
-        "Invoking the callback sets activeCharacterId in App state to the correct character ID.",
-        "The routing state transitions to the character sheet / dungeon select screen synchronously after the callback fires.",
-        "No loading flag or guard condition remains true and blocks the transition.",
-        "The transition occurs on the first click without needing a second attempt or page reload."
+        "Player character attacks exactly once every 12 combat ticks",
+        "A level 1 enemy attacks once every 21 ticks",
+        "A level 5 enemy attacks once every 20 ticks",
+        "A level 10 enemy attacks once every 19 ticks",
+        "Tick scaling formula is: enemyAttackTicks = 21 - Math.floor((enemyLevel - 1) / 5)",
+        "Player attack interval constant is named clearly (e.g., PLAYER_ATTACK_INTERVAL = 12) in combatEngine.ts",
+        "No other combat logic or game behavior is changed"
       ]
     }
   ],
   "constraints": [
-    "Do not modify any files listed in frontend.immutablePaths.",
-    "Do not alter backend logic or Motoko files for this fix.",
-    "The fix must be contained to CharacterSelectScreen.tsx and App.tsx only (plus any directly imported helper used solely by these two files)."
+    "Do not change any game logic, features, or mechanics outside of HP preservation and attack tick rate",
+    "Do not alter EXP scaling or any other combat parameters",
+    "Do not modify immutable frontend paths (hooks/useInternetIdentity.ts, hooks/useActor.ts, main.tsx, components/ui)"
   ],
   "nonGoals": [
-    "Redesigning the character select screen UI.",
-    "Changing character data fetching or query logic beyond what is necessary to unblock the callback.",
-    "Any backend changes."
+    "EXP scaling based on monster level and stats (deferred by user)",
+    "Any other combat rebalancing or new features",
+    "UI or visual changes"
   ],
   "imageRequirements": {
     "required": [],

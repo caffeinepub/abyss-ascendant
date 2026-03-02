@@ -1,10 +1,11 @@
 # Specification
 
 ## Summary
-**Goal:** Fix the non-functional "Enter The Realm" button in `CharacterSelectScreen.tsx` so that clicking it with a selected character correctly triggers navigation.
+**Goal:** Fix two combat bugs: HP resetting to max on character re-select, and player/enemy attack tick rates not using the correct default values.
 
 **Planned changes:**
-- In `CharacterSelectScreen.tsx`: audit and fix the `onClick` handler on the "Enter The Realm" button — ensure it is not conditionally disabled, is always rendered with an `onClick`, correctly calls `onSelectCharacter` with the selected character's ID, is never blocked by `pointer-events-none` or `stopPropagation`, and that the selected character state is non-null when clicked.
-- In `App.tsx`: audit and fix the `onSelectCharacter` callback — ensure it is defined (never `undefined`) at render time, correctly writes the selected character ID into app-level state, immediately transitions routing state to the character sheet/dungeon select screen, and that no loading flag or guard silently blocks the screen transition after the callback fires.
+- Save the character's current HP to persistent state (backend or local) before navigating away from the dungeon/game screen, and restore it when the same character is re-selected on the character select screen
+- Define a named constant `PLAYER_ATTACK_INTERVAL = 12` in the combat engine so the player attacks once every 12 ticks instead of every tick
+- Define enemy attack tick rate as `21 - Math.floor((enemyLevel - 1) / 5)` ticks (level 1 = 21 ticks, level 5 = 20 ticks, level 10 = 19 ticks, etc.) using named constants in the combat engine
 
-**User-visible outcome:** Clicking "Enter The Realm" with a character selected immediately navigates to the character sheet or dungeon select screen on the first click, with no blank screen, spinner, or silence.
+**User-visible outcome:** A character's HP is preserved when backing out to character select and re-entering, and combat timing is corrected so the player attacks every 12 ticks and enemies attack at the appropriate scaled rate based on their level.

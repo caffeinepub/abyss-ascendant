@@ -1,15 +1,16 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T14:05:39.630Z",
-  "summary": "The diff modifies App.tsx and CharacterSelectScreen.tsx to fix the 'Enter The Realm' button's dead click handler. App.tsx fixes handleSelectCharacter to accept (id, character) directly and eliminate the silent early-return guard. CharacterSelectScreen.tsx is updated with a revised onSelectCharacter signature. Both REQ-75 and REQ-76 appear to be addressed based on the file summaries, though the diffs are truncated and some implementation details cannot be fully verified.",
+  "generatedAt": "2026-03-02T14:16:22.508Z",
+  "summary": "Both REQ-1 (HP preservation on character select) and REQ-2 (attack tick rate constants) appear to be implemented in the diff. REQ-2 is clearly implemented with named constants in combatEngine.ts. REQ-1 is implemented via saving HP to the backend before navigating away in App.tsx's handleBackToCharacterSelect, and the backend's setHp endpoint supports it. No significant missing requirements or hallucinated features were found.",
   "missing_requirements": [],
   "hallucinated_features": [],
-  "confidence": 0.72,
+  "confidence": 0.87,
   "changed_files": [
+    "backend/main.mo",
     "frontend-file-summaries.txt",
     "frontend/src/App.tsx",
-    "frontend/src/components/CharacterSelectScreen.tsx",
+    "frontend/src/engine/combatEngine.ts",
     "project_state.json"
   ]
 }

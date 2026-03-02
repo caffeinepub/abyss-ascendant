@@ -1,301 +1,252 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { LocalCharacter, calculateLevel } from '../types/game';
-import { simulateCombat, generateMonster, Monster, CombatResult, PLAYER_TICKS_BETWEEN_ATTACKS } from '../engine/combatEngine';
-import { getEnemyTicksBetweenAttacks } from '../data/monsters';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { LocalCharacter } from '../types/game';
+import { simulateCombat, CombatResult } from '../engine/combatEngine';
 import { GeneratedItem } from '../engine/lootGenerator';
-import { useSubmitDungeonResult } from '../hooks/useQueries';
-import HealthBar from './HealthBar';
-import { ItemCard } from './ItemTooltip';
+import { useSubmitDungeonResult, useSetCharacterHp } from '../hooks/useQueries';
+import { calculateLevel } from '../types/game';
+import { Loader2, Sword, Shield, Skull, Trophy, ChevronRight, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface DungeonRunScreenProps {
   character: LocalCharacter;
+  characterId: number;
   dungeonLevel: number;
-  onComplete: (result: { xpEarned: number; finalHp: number; newLevel: number }) => void;
-  onBack: () => void;
+  dungeonMode: 'normal' | 'hardcore';
+  onComplete: (result: CombatResult, newXp: number, newLevel: number, remainingHp: number) => void;
+  onDeath: () => void;
 }
 
-const MONSTERS_PER_RUN = 5;
-const LOG_ANIMATION_DELAY_MS = 60;
+type RunPhase = 'running' | 'complete' | 'error';
 
 export default function DungeonRunScreen({
   character,
+  characterId,
   dungeonLevel,
+  dungeonMode,
   onComplete,
-  onBack,
+  onDeath,
 }: DungeonRunScreenProps) {
-  const submitDungeonResult = useSubmitDungeonResult();
-
-  const [phase, setPhase] = useState<'simulating' | 'animating' | 'done'>('simulating');
-  const [displayedLog, setDisplayedLog] = useState<CombatResult['log']>([]);
+  const [phase, setPhase] = useState<RunPhase>('running');
   const [combatResult, setCombatResult] = useState<CombatResult | null>(null);
-  const [monsters, setMonsters] = useState<Monster[]>([]);
-  const [currentMonsterIndex, setCurrentMonsterIndex] = useState(0);
-  const [savedSuccessfully, setSavedSuccessfully] = useState(false);
-
+  const [displayedLog, setDisplayedLog] = useState<string[]>([]);
+  const [logIndex, setLogIndex] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
-  const animationRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasSimulated = useRef(false);
+  const hasStarted = useRef(false);
 
-  // Run simulation on mount
-  useEffect(() => {
-    if (hasSimulated.current) return;
-    hasSimulated.current = true;
-
-    const generatedMonsters: Monster[] = [];
-    for (let i = 0; i < MONSTERS_PER_RUN; i++) {
-      generatedMonsters.push(generateMonster(dungeonLevel, i + 1));
-    }
-    setMonsters(generatedMonsters);
-
-    const result = simulateCombat(character, generatedMonsters);
-    setCombatResult(result);
-    setPhase('animating');
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Animate log entries
-  useEffect(() => {
-    if (phase !== 'animating' || !combatResult) return;
-
-    let index = 0;
-    const animate = () => {
-      if (index >= combatResult.log.length) {
-        setPhase('done');
-        return;
-      }
-
-      const entry = combatResult.log[index];
-      if (entry.type === 'info' && entry.message.includes('You encounter')) {
-        const monsterMatch = entry.message.match(/encounter a (.+?) \(Level/);
-        if (monsterMatch) {
-          const monsterName = monsterMatch[1];
-          const idx = monsters.findIndex(m => m.name === monsterName);
-          if (idx !== -1) setCurrentMonsterIndex(idx);
-        }
-      }
-
-      setDisplayedLog(prev => [...prev, combatResult.log[index]]);
-      index++;
-      animationRef.current = setTimeout(animate, LOG_ANIMATION_DELAY_MS);
-    };
-
-    animationRef.current = setTimeout(animate, LOG_ANIMATION_DELAY_MS);
-
-    return () => {
-      if (animationRef.current) clearTimeout(animationRef.current);
-    };
-  }, [phase, combatResult, monsters]);
+  const submitDungeonResult = useSubmitDungeonResult();
+  const setCharacterHp = useSetCharacterHp();
 
   // Auto-scroll log
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [displayedLog]);
 
-  // Save results when done
+  // Start combat immediately on mount
   useEffect(() => {
-    if (phase !== 'done' || !combatResult || savedSuccessfully) return;
+    if (hasStarted.current) return;
+    hasStarted.current = true;
 
-    const currentXp = character.xp + combatResult.xpEarned;
-    const newLevel = Math.max(character.level, calculateLevel(currentXp));
-    const totalStatPointsEarned = newLevel - 1;
-
-    submitDungeonResult.mutate(
+    const result = simulateCombat(
       {
-        characterId: character.id,
-        xpEarned: BigInt(currentXp),
-        newLevel: BigInt(newLevel),
-        unspentStatPoints: BigInt(totalStatPointsEarned),
+        str: character.stats.str,
+        dex: character.stats.dex,
+        int: character.stats.int,
+        vit: character.stats.vit,
+        maxHp: character.stats.maxHp,
+        currentHp: character.stats.currentHp,
+        critChance: character.stats.critChance,
+        critPower: character.stats.critPower,
+        equippedItems: character.equippedItems,
+        abilities: character.abilities,
       },
-      {
-        onSuccess: () => setSavedSuccessfully(true),
-      }
+      dungeonLevel,
+      dungeonMode === 'hardcore',
+      character.realm
     );
-  }, [phase, combatResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleContinue = useCallback(() => {
-    if (!combatResult) return;
-    const currentXp = character.xp + combatResult.xpEarned;
-    const newLevel = Math.max(character.level, calculateLevel(currentXp));
-    onComplete({
-      xpEarned: combatResult.xpEarned,
-      finalHp: combatResult.finalPlayerHp,
-      newLevel,
-    });
-  }, [combatResult, character, onComplete]);
+    setCombatResult(result);
+    setDisplayedLog([]);
+    setLogIndex(0);
+    setPhase('running');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const getLogEntryColor = (type: CombatResult['log'][0]['type']) => {
-    switch (type) {
-      case 'player-attack': return 'text-blue-400';
-      case 'enemy-attack': return 'text-red-400';
-      case 'player-ability': return 'text-purple-400';
-      case 'crit': return 'text-yellow-400 font-semibold';
-      case 'enemy-death': return 'text-green-400 font-semibold';
-      case 'player-death': return 'text-red-500 font-bold';
-      case 'loot': return 'text-amber-400';
-      case 'info': return 'text-muted-foreground';
-      default: return 'text-foreground';
+  // Animate log lines
+  useEffect(() => {
+    if (phase !== 'running' || !combatResult) return;
+    if (logIndex >= combatResult.log.length) {
+      setPhase('complete');
+      return;
     }
-  };
+    const timer = setTimeout(() => {
+      setDisplayedLog(prev => [...prev, combatResult.log[logIndex]]);
+      setLogIndex(prev => prev + 1);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [phase, combatResult, logIndex]);
 
-  const currentMonster = monsters[currentMonsterIndex];
+  const handleContinue = useCallback(async () => {
+    if (!combatResult) return;
+    setSaveError(null);
+
+    // Calculate new XP and level
+    const currentXp = character.xp;
+    const newTotalXp = currentXp + combatResult.xpEarned;
+    const newLevel = Math.min(calculateLevel(newTotalXp), 50);
+    const remainingHp = combatResult.remainingHp;
+
+    // Handle death before saving
+    if (!combatResult.victory && character.realm === 'Hardcore') {
+      onDeath();
+      return;
+    }
+
+    // Fire backend saves silently in the background — do not block the UI
+    const hpToSave = Math.min(remainingHp, character.stats.maxHp);
+    submitDungeonResult.mutate({
+      characterId,
+      xpEarned: BigInt(newTotalXp),
+      newLevel: BigInt(newLevel),
+      unspentStatPoints: BigInt(Math.max(0, newLevel - 1 - character.totalStatPointsSpent)),
+    });
+    setCharacterHp.mutate({
+      characterId,
+      hp: hpToSave,
+    });
+
+    // Immediately proceed — no waiting for save
+    onComplete(combatResult, newTotalXp, newLevel, remainingHp);
+  }, [combatResult, character, characterId, submitDungeonResult, setCharacterHp, onComplete, onDeath]);
+
+  const handleRetry = useCallback(() => {
+    setSaveError(null);
+    setPhase('complete');
+  }, []);
+
+  const isVictory = combatResult?.victory ?? false;
+  const isDeath = combatResult ? !combatResult.victory : false;
+  const isSoftcoreDeath = isDeath && character.realm === 'Softcore';
 
   return (
-    <div className="max-w-3xl mx-auto p-4 space-y-4">
-      {/* Header */}
-      <div className="bg-surface-1 rounded-lg p-4 border border-border">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-display font-bold text-primary">
-              Dungeon Level {dungeonLevel}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {phase === 'simulating' && 'Preparing combat...'}
-              {phase === 'animating' && 'Combat in progress...'}
-              {phase === 'done' && (combatResult?.victory ? '⚔️ Victory!' : '💀 Defeated!')}
-            </p>
-          </div>
-          <div className="text-right text-sm text-muted-foreground">
-            <div>Your attack speed: <span className="text-foreground font-semibold">{PLAYER_TICKS_BETWEEN_ATTACKS} ticks</span></div>
-          </div>
-        </div>
-      </div>
-
-      {/* Combat Area */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Player */}
-        <div className="bg-surface-1 rounded-lg p-4 border border-border">
-          <h3 className="font-display font-semibold text-foreground mb-2">{character.name}</h3>
-          <HealthBar
-            currentHP={phase === 'done' && combatResult ? combatResult.finalPlayerHp : character.stats.currentHp}
-            maxHP={character.stats.maxHp}
-          />
-          <div className="mt-2 text-xs text-muted-foreground space-y-1">
-            <div>ATK: {character.stats.attack} | DEF: {character.stats.defense}</div>
-            <div>Attack Speed: {PLAYER_TICKS_BETWEEN_ATTACKS} ticks/attack</div>
-          </div>
+    <div className="min-h-screen bg-surface-1 flex flex-col items-center justify-start p-4 pt-8">
+      <div className="w-full max-w-2xl">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <h1 className="font-display text-3xl text-primary mb-1">
+            Dungeon Level {dungeonLevel}
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            {character.name} — {character.realm}
+          </p>
         </div>
 
-        {/* Current Monster */}
-        {currentMonster && (
-          <div className="bg-surface-1 rounded-lg p-4 border border-border">
-            <div className="flex items-center gap-3 mb-2">
-              <img
-                src="/assets/generated/monster-placeholder.dim_128x128.png"
-                alt={currentMonster.name}
-                className="w-10 h-10 rounded object-cover"
-              />
-              <div>
-                <h3 className="font-display font-semibold text-foreground">{currentMonster.name}</h3>
-                <span className="text-xs text-muted-foreground">Level {currentMonster.level}</span>
-              </div>
-            </div>
-            <div className="w-full bg-surface-2 rounded-full h-2 mb-2">
+        {/* Combat Log */}
+        <div className="bg-surface-2 rounded-lg border border-border">
+          {/* Combat log */}
+          <div className="p-4 h-80 overflow-y-auto font-mono text-sm">
+            {displayedLog.map((line, i) => (
               <div
-                className="bg-red-500 h-2 rounded-full transition-all"
-                style={{ width: '100%' }}
-              />
-            </div>
-            <div className="text-xs text-muted-foreground space-y-1">
-              <div>HP: {currentMonster.hp} | ATK: {currentMonster.attack} | DEF: {currentMonster.defense}</div>
-              <div>Attack Speed: {getEnemyTicksBetweenAttacks(currentMonster.level)} ticks/attack</div>
-              <div>XP Reward: <span className="text-accent font-semibold">{currentMonster.xpReward}</span></div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Monster List */}
-      <div className="bg-surface-1 rounded-lg p-4 border border-border">
-        <h3 className="font-display font-semibold text-foreground mb-3">Enemies This Run</h3>
-        <div className="grid grid-cols-5 gap-2">
-          {monsters.map((monster, i) => (
-            <div
-              key={monster.id}
-              className={`text-center p-2 rounded border text-xs font-display transition-colors ${
-                i === currentMonsterIndex && phase !== 'done'
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-surface-2 text-muted-foreground'
-              }`}
-            >
-              <div className="font-semibold truncate">{monster.name}</div>
-              <div>Lv.{monster.level}</div>
-              <div className="text-accent">{monster.xpReward} XP</div>
-              <div className="text-muted-foreground/70">{getEnemyTicksBetweenAttacks(monster.level)}t</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Combat Log */}
-      <div className="bg-surface-1 rounded-lg border border-border">
-        <div className="p-3 border-b border-border">
-          <h3 className="font-display font-semibold text-foreground">Combat Log</h3>
-        </div>
-        <div className="h-64 overflow-y-auto p-3 space-y-1 font-mono text-xs">
-          {displayedLog.map((entry, i) => (
-            <div key={i} className={getLogEntryColor(entry.type)}>
-              <span className="text-muted-foreground/50 mr-2">[{entry.tick}]</span>
-              {entry.message}
-            </div>
-          ))}
-          {phase === 'simulating' && (
-            <div className="text-muted-foreground animate-pulse">Simulating combat...</div>
-          )}
-          <div ref={logEndRef} />
-        </div>
-      </div>
-
-      {/* Results */}
-      {phase === 'done' && combatResult && (
-        <div className="bg-surface-1 rounded-lg p-4 border border-border space-y-3">
-          <h3 className="font-display font-semibold text-foreground text-lg">
-            {combatResult.victory ? '🏆 Run Complete!' : '💀 Run Failed'}
-          </h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="bg-surface-2 rounded p-3">
-              <div className="text-muted-foreground">Monsters Defeated</div>
-              <div className="font-display font-bold text-foreground text-lg">{combatResult.monstersDefeated}/{MONSTERS_PER_RUN}</div>
-            </div>
-            <div className="bg-surface-2 rounded p-3">
-              <div className="text-muted-foreground">XP Earned</div>
-              <div className="font-display font-bold text-accent text-lg">+{combatResult.xpEarned}</div>
-            </div>
-            <div className="bg-surface-2 rounded p-3">
-              <div className="text-muted-foreground">Final HP</div>
-              <div className="font-display font-bold text-foreground text-lg">{combatResult.finalPlayerHp}/{character.stats.maxHp}</div>
-            </div>
-            <div className="bg-surface-2 rounded p-3">
-              <div className="text-muted-foreground">Total Ticks</div>
-              <div className="font-display font-bold text-foreground text-lg">{combatResult.totalTicks}</div>
-            </div>
+                key={i}
+                className={`mb-1 ${
+                  line.includes('CRIT') ? 'text-yellow-400 font-bold' :
+                  line.includes('defeated') ? 'text-green-400' :
+                  line.includes('slain') || line.includes('dead') ? 'text-red-400' :
+                  line.includes('XP') ? 'text-accent' :
+                  line.includes('Loot') ? 'text-purple-400' :
+                  line.startsWith('Entering') || line.startsWith('Encountered') || line.startsWith('Dungeon') ? 'text-primary font-semibold' :
+                  'text-foreground/80'
+                }`}
+              >
+                {line}
+              </div>
+            ))}
+            {phase === 'running' && (
+              <div className="flex items-center gap-2 text-muted-foreground mt-2">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Combat in progress...</span>
+              </div>
+            )}
+            <div ref={logEndRef} />
           </div>
 
-          {combatResult.loot.length > 0 && (
-            <div>
-              <h4 className="font-display font-semibold text-foreground mb-2">Loot Dropped</h4>
-              <div className="flex flex-wrap gap-2">
-                {combatResult.loot.map((item: GeneratedItem) => (
-                  <ItemCard key={item.id} item={item} />
-                ))}
+          {/* Result Banner */}
+          {(phase === 'complete' || phase === 'error') && combatResult && (
+            <div className={`border-t border-border p-4 ${
+              isVictory ? 'bg-green-950/30' : 'bg-red-950/30'
+            }`}>
+              <div className="flex items-center gap-3 mb-3">
+                {isVictory ? (
+                  <Trophy className="w-6 h-6 text-yellow-400" />
+                ) : (
+                  <Skull className="w-6 h-6 text-red-400" />
+                )}
+                <div>
+                  <h3 className="font-display text-lg">
+                    {isVictory ? 'Victory!' : isSoftcoreDeath ? 'Defeated...' : 'You Died'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isVictory
+                      ? `+${combatResult.xpEarned} XP earned • ${combatResult.loot.length} items found`
+                      : isSoftcoreDeath
+                      ? 'You survived with 1 HP. Rest and recover.'
+                      : 'Your journey ends here.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Loot preview */}
+              {combatResult.loot.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-muted-foreground mb-1">Items found:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {combatResult.loot.map((item: GeneratedItem, i: number) => (
+                      <span
+                        key={i}
+                        className={`text-xs px-2 py-1 rounded border ${
+                          item.rarity === 'Legendary' ? 'border-yellow-500 text-yellow-400' :
+                          item.rarity === 'Rare' ? 'border-blue-500 text-blue-400' :
+                          item.rarity === 'Uncommon' ? 'border-green-500 text-green-400' :
+                          'border-border text-muted-foreground'
+                        }`}
+                      >
+                        {item.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Error message */}
+              {phase === 'error' && saveError && (
+                <div className="flex items-center gap-2 text-red-400 text-sm mb-3 bg-red-950/40 rounded p-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{saveError}</span>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex gap-2 justify-end">
+                {phase === 'error' && (
+                  <Button variant="outline" size="sm" onClick={handleRetry}>
+                    Retry
+                  </Button>
+                )}
+                {phase === 'complete' && (
+                  <Button
+                    size="sm"
+                    onClick={handleContinue}
+                    className="flex items-center gap-1"
+                  >
+                    Continue
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </div>
           )}
-
-          <div className="flex gap-2">
-            <button
-              onClick={onBack}
-              className="flex-1 py-3 bg-surface-2 text-foreground rounded font-display font-semibold hover:bg-surface-2/80 transition-colors border border-border"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleContinue}
-              className="flex-1 py-3 bg-primary text-primary-foreground rounded font-display font-semibold hover:bg-primary/90 transition-colors"
-            >
-              Continue
-            </button>
-          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

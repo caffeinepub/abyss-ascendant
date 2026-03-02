@@ -11,8 +11,6 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 import MixinStorage "blob-storage/Mixin";
 
-
-
 actor {
   let maxStats = 100;
   let maxLevel = 50;

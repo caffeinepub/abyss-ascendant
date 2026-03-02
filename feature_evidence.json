@@ -2,28 +2,8 @@
   "kind": "feature_evidence_report",
   "features": [
     {
-      "featureId": "feature-in-characterselectscreen-tsx-audit-the-enter-the-realm-button-s-onclick-handler-end-to-end-identify-and-fix-every-reason-the-button-produces-zero-feedback-and-does-not-navigate-when-clicked-specifically-1-confirm-the-button-is-not-conditionally-disabled-or-rendered-without-an-onclick-2-confirm-the-handler-calls-the-onselectcharacter-or-equivalent-prop-with-the-selected-character-s-id-3-confirm-no-outer-element-is-swallowing-the-click-event-e-g-a-pointer-events-none-overlay-or-a-stoppropagation-call-4-confirm-the-selected-character-state-is-non-null-at-the-time-the-button-is-clicked-so-the-id-passed-is-valid-5-remove-any-guard-or-early-return-that-silently-prevents-the-callback-from-firing",
-      "featureTitle": "In CharacterSelectScreen.tsx, audit the 'Enter The Realm' button's onClick handler end-to-end. Identify and fix every reason the button produces zero feedback and does not navigate when clicked. Specifically: (1) confirm the button is not conditionally disabled or rendered without an onClick; (2) confirm the handler calls the onSelectCharacter (or equivalent) prop with the selected character's ID; (3) confirm no outer element is swallowing the click event (e.g. a pointer-events-none overlay or a stopPropagation call); (4) confirm the selected character state is non-null at the time the button is clicked so the ID passed is valid; (5) remove any guard or early-return that silently prevents the callback from firing.",
-      "files": [
-        "frontend/src/components/CharacterSelectScreen.tsx"
-      ],
-      "components": [
-        "authorization@4.0.0",
-        "blob-storage@4.0.0",
-        "core-infrastructure@1.0.2",
-        "shadcn-ui@1.0.0",
-        "build-template-react@1.0.0",
-        "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0"
-      ],
-      "testIds": [
-        "REQ-75"
-      ],
-      "confidence": "high"
-    },
-    {
-      "featureId": "feature-in-app-tsx-audit-the-onselectcharacter-callback-or-equivalent-that-is-passed-as-a-prop-to-characterselectscreen-verify-1-the-callback-is-defined-as-a-stable-function-usecallback-or-equivalent-and-is-not-undefined-at-render-time-2-it-correctly-writes-the-selected-character-s-id-into-app-level-state-e-g-activecharacterid-3-after-setting-the-id-it-immediately-updates-the-routing-state-to-transition-to-the-character-sheet-dungeon-select-screen-4-no-intermediate-loading-flag-isloading-guard-or-conditional-render-silently-blocks-the-screen-transition-after-the-callback-fires-5-if-any-such-guard-exists-ensure-it-evaluates-to-false-i-e-not-blocking-by-the-time-the-callback-completes",
-      "featureTitle": "In App.tsx, audit the onSelectCharacter callback (or equivalent) that is passed as a prop to CharacterSelectScreen. Verify: (1) the callback is defined as a stable function (useCallback or equivalent) and is not undefined at render time; (2) it correctly writes the selected character's ID into App-level state (e.g. activeCharacterId); (3) after setting the ID it immediately updates the routing state to transition to the character sheet / dungeon select screen; (4) no intermediate loading flag, isLoading guard, or conditional render silently blocks the screen transition after the callback fires; (5) if any such guard exists, ensure it evaluates to false (i.e. not blocking) by the time the callback completes.",
+      "featureId": "feature-when-a-player-backs-out-to-the-character-select-screen-and-re-selects-their-character-the-character-s-current-hp-must-be-preserved-exactly-as-it-was-it-must-not-reset-to-max-hp-the-hp-value-should-be-saved-either-to-backend-or-persistent-local-state-before-navigating-away-from-the-dungeon-game-screen-and-restored-when-re-entering-with-that-character",
+      "featureTitle": "When a player backs out to the character select screen and re-selects their character, the character's current HP must be preserved exactly as it was — it must NOT reset to max HP. The HP value should be saved (either to backend or persistent local state) before navigating away from the dungeon/game screen and restored when re-entering with that character.",
       "files": [
         "frontend/src/App.tsx"
       ],
@@ -37,7 +17,27 @@
         "github-export-icp-cli@1.0.0"
       ],
       "testIds": [
-        "REQ-76"
+        "REQ-1"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-fix-the-player-attack-tick-rate-so-the-player-attacks-every-12-ticks-by-default-not-every-tick-additionally-set-level-1-enemies-to-attack-every-21-ticks-scaling-down-by-1-tick-every-5-enemy-levels-level-5-20-ticks-level-10-19-ticks-level-15-18-ticks-etc-these-values-must-be-defined-as-named-constants-in-the-combat-engine-and-must-not-be-changed-unless-explicitly-requested",
+      "featureTitle": "Fix the player attack tick rate so the player attacks every 12 ticks by default (not every tick). Additionally, set level 1 enemies to attack every 21 ticks, scaling down by 1 tick every 5 enemy levels (level 5 = 20 ticks, level 10 = 19 ticks, level 15 = 18 ticks, etc.). These values must be defined as named constants in the combat engine and must not be changed unless explicitly requested.",
+      "files": [
+        "frontend/src/engine/combatEngine.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-2"
       ],
       "confidence": "high"
     }

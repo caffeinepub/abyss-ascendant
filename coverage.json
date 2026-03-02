@@ -1,7 +1,7 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T14:05:39.635Z",
+  "generatedAt": "2026-03-02T14:16:22.511Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
@@ -11,36 +11,40 @@
     "implemented": 2,
     "items": [
       {
-        "id": "REQ-75",
-        "summary": "In CharacterSelectScreen.tsx, audit the 'Enter The Realm' button's onClick handler end-to-end. Identify and fix every reason the button produces zero feedback and does not navigate when clicked. Specifically: (1) confirm the button is not conditionally disabled or rendered without an onClick; (2) confirm the handler calls the onSelectCharacter (or equivalent) prop with the selected character's ID; (3) confirm no outer element is swallowing the click event (e.g. a pointer-events-none overlay or a stopPropagation call); (4) confirm the selected character state is non-null at the time the button is clicked so the ID passed is valid; (5) remove any guard or early-return that silently prevents the callback from firing.",
+        "id": "REQ-1",
+        "summary": "When a player backs out to the character select screen and re-selects their character, the character's current HP must be preserved exactly as it was — it must NOT reset to max HP. The HP value should be saved (either to backend or persistent local state) before navigating away from the dungeon/game screen and restored when re-entering with that character.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/components/CharacterSelectScreen.tsx"
+          "frontend/src/App.tsx",
+          "frontend/src/hooks/useLocalCharacter.ts",
+          "frontend/src/components/CharacterSelectScreen.tsx",
+          "frontend/src/components/DungeonRunScreen.tsx"
         ],
         "matchedFiles": [
-          "frontend/src/components/CharacterSelectScreen.tsx"
+          "frontend/src/App.tsx"
         ]
       },
       {
-        "id": "REQ-76",
-        "summary": "In App.tsx, audit the onSelectCharacter callback (or equivalent) that is passed as a prop to CharacterSelectScreen. Verify: (1) the callback is defined as a stable function (useCallback or equivalent) and is not undefined at render time; (2) it correctly writes the selected character's ID into App-level state (e.g. activeCharacterId); (3) after setting the ID it immediately updates the routing state to transition to the character sheet / dungeon select screen; (4) no intermediate loading flag, isLoading guard, or conditional render silently blocks the screen transition after the callback fires; (5) if any such guard exists, ensure it evaluates to false (i.e. not blocking) by the time the callback completes.",
+        "id": "REQ-2",
+        "summary": "Fix the player attack tick rate so the player attacks every 12 ticks by default (not every tick). Additionally, set level 1 enemies to attack every 21 ticks, scaling down by 1 tick every 5 enemy levels (level 5 = 20 ticks, level 10 = 19 ticks, level 15 = 18 ticks, etc.). These values must be defined as named constants in the combat engine and must not be changed unless explicitly requested.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/App.tsx"
+          "frontend/src/engine/combatEngine.ts"
         ],
         "matchedFiles": [
-          "frontend/src/App.tsx"
+          "frontend/src/engine/combatEngine.ts"
         ]
       }
     ]
   },
   "changedFiles": [
+    "backend/main.mo",
     "build-request.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
     "frontend/src/App.tsx",
-    "frontend/src/components/CharacterSelectScreen.tsx",
+    "frontend/src/engine/combatEngine.ts",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

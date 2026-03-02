@@ -1,87 +1,79 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { LocalCharacter } from '../types/game';
-import { useSetCharacterHp } from './useQueries';
 
-const REGEN_INTERVAL_MS = 1000; // 1 second
-const REGEN_AMOUNT = 2;
-const SYNC_THRESHOLD = 10; // sync to backend every 10 HP gained
+const REGEN_RATE = 2; // HP per second
+const REGEN_INTERVAL = 1000; // ms
 
 interface UseHealthRegenOptions {
-  character: LocalCharacter | null;
+  currentHp: number;
+  maxHp: number;
   isInCombat: boolean;
   onHpChange: (newHp: number) => void;
+  onBackendSync?: (newHp: number) => void;
 }
 
-export function useHealthRegen({ character, isInCombat, onHpChange }: UseHealthRegenOptions) {
-  const setCharacterHp = useSetCharacterHp();
-
-  // Use refs to avoid stale closures in the interval
-  const characterRef = useRef(character);
+export function useHealthRegen({
+  currentHp,
+  maxHp,
+  isInCombat,
+  onHpChange,
+  onBackendSync,
+}: UseHealthRegenOptions): void {
+  const currentHpRef = useRef(currentHp);
+  const maxHpRef = useRef(maxHp);
   const isInCombatRef = useRef(isInCombat);
-  const hpSinceLastSyncRef = useRef(0);
-  const currentHpRef = useRef<number | null>(null);
+  const onHpChangeRef = useRef(onHpChange);
+  const onBackendSyncRef = useRef(onBackendSync);
 
-  // Keep refs in sync with latest props
+  // Keep refs in sync with latest values
   useEffect(() => {
-    characterRef.current = character;
-  }, [character]);
+    currentHpRef.current = currentHp;
+  }, [currentHp]);
+
+  useEffect(() => {
+    maxHpRef.current = maxHp;
+  }, [maxHp]);
 
   useEffect(() => {
     isInCombatRef.current = isInCombat;
   }, [isInCombat]);
 
-  // When character id changes (new character selected), reset the HP ref
-  // so we always start from the backend-persisted value
-  const characterId = character?.id;
   useEffect(() => {
-    if (character) {
-      currentHpRef.current = character.stats.currentHp;
-      hpSinceLastSyncRef.current = 0;
-    } else {
-      currentHpRef.current = null;
+    onHpChangeRef.current = onHpChange;
+  }, [onHpChange]);
+
+  useEffect(() => {
+    onBackendSyncRef.current = onBackendSync;
+  }, [onBackendSync]);
+
+  const tick = useCallback(() => {
+    if (isInCombatRef.current) return;
+    const hp = currentHpRef.current;
+    const max = maxHpRef.current;
+    if (hp >= max) return;
+
+    const newHp = Math.min(hp + REGEN_RATE, max);
+    currentHpRef.current = newHp;
+    onHpChangeRef.current(newHp);
+
+    // Sync to backend every 5 HP gained or when full
+    if (newHp === max || (newHp - hp) % 10 === 0) {
+      onBackendSyncRef.current?.(newHp);
     }
-  }, [characterId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const syncHpToBackend = useCallback((hp: number) => {
-    const char = characterRef.current;
-    if (!char) return;
-    setCharacterHp.mutate({ characterId: char.id, hp });
-    hpSinceLastSyncRef.current = 0;
-  }, [setCharacterHp]);
+  }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const char = characterRef.current;
-      if (!char || isInCombatRef.current) return;
+    // Don't start regen if already at max
+    if (currentHp >= maxHp) return;
+    if (isInCombat) return;
 
-      const maxHp = char.stats.maxHp;
-      const liveHp = currentHpRef.current ?? char.stats.currentHp;
-
-      if (liveHp >= maxHp) return;
-
-      const newHp = Math.min(maxHp, liveHp + REGEN_AMOUNT);
-      currentHpRef.current = newHp;
-      hpSinceLastSyncRef.current += REGEN_AMOUNT;
-
-      onHpChange(newHp);
-
-      // Sync to backend periodically or when full
-      if (hpSinceLastSyncRef.current >= SYNC_THRESHOLD || newHp >= maxHp) {
-        syncHpToBackend(newHp);
-      }
-    }, REGEN_INTERVAL_MS);
-
+    const interval = setInterval(tick, REGEN_INTERVAL);
     return () => clearInterval(interval);
-  }, [onHpChange, syncHpToBackend]);
+  }, [isInCombat, maxHp, tick]);
 
-  // Sync HP to backend when component unmounts (navigation away)
+  // Also sync to backend when regen completes (reaches max)
   useEffect(() => {
-    return () => {
-      const char = characterRef.current;
-      const liveHp = currentHpRef.current;
-      if (char && liveHp !== null && liveHp !== char.stats.currentHp) {
-        setCharacterHp.mutate({ characterId: char.id, hp: liveHp });
-      }
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (currentHp >= maxHp && !isInCombat) {
+      onBackendSync?.(currentHp);
+    }
+  }, [currentHp, maxHp, isInCombat, onBackendSync]);
 }

@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Trash2, Loader2, Plus, Shield, Sword, Skull, AlertTriangle, RefreshCw, LogIn } from 'lucide-react';
+import { Trash2, Loader2, Plus, Shield, Sword, Skull, AlertTriangle, RefreshCw } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -29,7 +29,7 @@ interface CharacterWithId {
 
 interface CharacterSelectScreenProps {
   characters: CharacterWithId[];
-  onSelectCharacter: (characterId: number, character: Character) => void;
+  onSelectCharacter: (characterId: number) => void;
   onCreateCharacter: () => void;
   isLoading?: boolean;
   isError?: boolean;
@@ -136,84 +136,68 @@ export default function CharacterSelectScreen({
             return (
               <div
                 key={id}
-                className={`relative flex flex-col bg-surface-1 border rounded-xl p-4 transition-all ${
+                className={`relative flex items-center gap-4 bg-surface-1 border rounded-xl p-4 transition-all ${
                   isDead
-                    ? 'border-destructive/30 opacity-60'
-                    : 'border-border hover:border-primary/50 hover:bg-surface-2'
+                    ? 'border-destructive/30 opacity-60 cursor-not-allowed'
+                    : 'border-border hover:border-primary/50 cursor-pointer hover:bg-surface-2'
                 }`}
+                onClick={() => !isDead && onSelectCharacter(id)}
               >
-                {/* Top row: icon + info + delete */}
-                <div className="flex items-center gap-4">
-                  {/* Class Icon */}
-                  <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
-                      isDead ? 'bg-destructive/20' : 'bg-primary/20'
-                    }`}
-                  >
-                    {isDead ? (
-                      <Skull className="w-6 h-6 text-destructive" />
-                    ) : isHardcore ? (
-                      <Sword className="w-6 h-6 text-primary" />
-                    ) : (
-                      <Shield className="w-6 h-6 text-primary" />
-                    )}
-                  </div>
-
-                  {/* Character Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-display text-lg text-foreground font-semibold truncate">
-                        {character.name}
-                      </span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${
-                          isHardcore
-                            ? 'border-destructive/50 text-destructive bg-destructive/10'
-                            : 'border-primary/50 text-primary bg-primary/10'
-                        }`}
-                      >
-                        {isHardcore ? '⚔ HC' : '🛡 SC'}
-                      </span>
-                      {isDead && (
-                        <span className="text-xs px-2 py-0.5 rounded-full border border-destructive/50 text-destructive bg-destructive/10 shrink-0">
-                          DEAD
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground mb-2">
-                      Level {Number(character.level)} · Tier {Number(character.classTier)}
-                    </div>
-                    {!isDead && <HealthBar currentHP={currentHP} maxHP={maxHP} compact />}
-                  </div>
-
-                  {/* Delete Button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteTarget({ id, name: character.name });
-                    }}
-                    disabled={deleteCharacterMutation.isPending}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                {/* Class Icon */}
+                <div
+                  className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
+                    isDead ? 'bg-destructive/20' : 'bg-primary/20'
+                  }`}
+                >
+                  {isDead ? (
+                    <Skull className="w-6 h-6 text-destructive" />
+                  ) : isHardcore ? (
+                    <Sword className="w-6 h-6 text-primary" />
+                  ) : (
+                    <Shield className="w-6 h-6 text-primary" />
+                  )}
                 </div>
 
-                {/* Enter The Realm button — only for living characters */}
-                {!isDead && (
-                  <div className="mt-3 pt-3 border-t border-border/50">
-                    <Button
-                      className="w-full gap-2 font-display"
-                      size="sm"
-                      onClick={() => onSelectCharacter(id, character)}
+                {/* Character Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-display text-lg text-foreground font-semibold truncate">
+                      {character.name}
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${
+                        isHardcore
+                          ? 'border-destructive/50 text-destructive bg-destructive/10'
+                          : 'border-primary/50 text-primary bg-primary/10'
+                      }`}
                     >
-                      <LogIn className="w-4 h-4" />
-                      Enter The Realm
-                    </Button>
+                      {isHardcore ? '⚔ HC' : '🛡 SC'}
+                    </span>
+                    {isDead && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border border-destructive/50 text-destructive bg-destructive/10 shrink-0">
+                        DEAD
+                      </span>
+                    )}
                   </div>
-                )}
+                  <div className="text-xs text-muted-foreground mb-2">
+                    Level {Number(character.level)} · Tier {Number(character.classTier)}
+                  </div>
+                  {!isDead && <HealthBar currentHP={currentHP} maxHP={maxHP} compact />}
+                </div>
+
+                {/* Delete Button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget({ id, name: character.name });
+                  }}
+                  disabled={deleteCharacterMutation.isPending}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               </div>
             );
           })}
@@ -229,7 +213,6 @@ export default function CharacterSelectScreen({
                   disabled={atCharacterLimit}
                   className="w-full gap-2"
                   size="lg"
-                  variant="outline"
                 >
                   <Plus className="w-5 h-5" />
                   Create New Character
