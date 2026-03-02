@@ -28,6 +28,14 @@ export const Realm = IDL.Variant({
   'Hardcore' : IDL.Null,
   'Softcore' : IDL.Null,
 });
+export const CharacterCreationParams = IDL.Record({
+  'dex' : IDL.Nat,
+  'int' : IDL.Nat,
+  'str' : IDL.Nat,
+  'vit' : IDL.Nat,
+  'name' : IDL.Text,
+  'realm' : Realm,
+});
 export const CharacterId = IDL.Nat8;
 export const CharacterCreationError = IDL.Variant({
   'noPermission' : IDL.Null,
@@ -39,20 +47,30 @@ export const CharacterStatus = IDL.Variant({
   'Dead' : IDL.Null,
   'Alive' : IDL.Null,
 });
-export const Character = IDL.Record({
-  'xp' : IDL.Nat,
+export const BaseStats = IDL.Record({
   'dex' : IDL.Nat,
   'int' : IDL.Nat,
   'str' : IDL.Nat,
   'vit' : IDL.Nat,
+});
+export const AdvancedStats = IDL.Record({
   'maxHP' : IDL.Nat,
-  'status' : CharacterStatus,
   'currentHP' : IDL.Nat,
+  'critChance' : IDL.Nat,
+  'critPower' : IDL.Nat,
+});
+export const Character = IDL.Record({
+  'xp' : IDL.Nat,
+  'status' : CharacterStatus,
+  'totalStatPointsEarned' : IDL.Nat,
   'name' : IDL.Text,
   'season' : IDL.Nat,
   'level' : IDL.Nat,
+  'baseStats' : BaseStats,
+  'advancedStats' : AdvancedStats,
   'classTier' : IDL.Nat,
   'realm' : Realm,
+  'totalStatPointsSpent' : IDL.Nat,
 });
 export const ItemType = IDL.Variant({
   'Weapon' : IDL.Null,
@@ -92,6 +110,12 @@ export const SetHpError = IDL.Variant({
   'maxHPExceeded' : IDL.Null,
   'alreadyFullHP' : IDL.Null,
 });
+export const DungeonResult = IDL.Record({
+  'unspentStatPoints' : IDL.Nat,
+  'newLevel' : IDL.Nat,
+  'xpEarned' : IDL.Nat,
+  'characterId' : CharacterId,
+});
 
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -124,7 +148,7 @@ export const idlService = IDL.Service({
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'buyItem' : IDL.Func([IDL.Text], [], []),
   'createCharacter' : IDL.Func(
-      [IDL.Text, Realm],
+      [CharacterCreationParams],
       [IDL.Variant({ 'ok' : CharacterId, 'err' : CharacterCreationError })],
       [],
     ),
@@ -152,6 +176,8 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : SetHpError })],
       [],
     ),
+  'spendStatPoints' : IDL.Func([CharacterId, IDL.Nat], [], []),
+  'submitDungeonResult' : IDL.Func([DungeonResult], [], []),
   'uploadItemImage' : IDL.Func([IDL.Text, ExternalBlob], [], []),
 });
 
@@ -175,6 +201,14 @@ export const idlFactory = ({ IDL }) => {
     'guest' : IDL.Null,
   });
   const Realm = IDL.Variant({ 'Hardcore' : IDL.Null, 'Softcore' : IDL.Null });
+  const CharacterCreationParams = IDL.Record({
+    'dex' : IDL.Nat,
+    'int' : IDL.Nat,
+    'str' : IDL.Nat,
+    'vit' : IDL.Nat,
+    'name' : IDL.Text,
+    'realm' : Realm,
+  });
   const CharacterId = IDL.Nat8;
   const CharacterCreationError = IDL.Variant({
     'noPermission' : IDL.Null,
@@ -186,20 +220,30 @@ export const idlFactory = ({ IDL }) => {
     'Dead' : IDL.Null,
     'Alive' : IDL.Null,
   });
-  const Character = IDL.Record({
-    'xp' : IDL.Nat,
+  const BaseStats = IDL.Record({
     'dex' : IDL.Nat,
     'int' : IDL.Nat,
     'str' : IDL.Nat,
     'vit' : IDL.Nat,
+  });
+  const AdvancedStats = IDL.Record({
     'maxHP' : IDL.Nat,
-    'status' : CharacterStatus,
     'currentHP' : IDL.Nat,
+    'critChance' : IDL.Nat,
+    'critPower' : IDL.Nat,
+  });
+  const Character = IDL.Record({
+    'xp' : IDL.Nat,
+    'status' : CharacterStatus,
+    'totalStatPointsEarned' : IDL.Nat,
     'name' : IDL.Text,
     'season' : IDL.Nat,
     'level' : IDL.Nat,
+    'baseStats' : BaseStats,
+    'advancedStats' : AdvancedStats,
     'classTier' : IDL.Nat,
     'realm' : Realm,
+    'totalStatPointsSpent' : IDL.Nat,
   });
   const ItemType = IDL.Variant({
     'Weapon' : IDL.Null,
@@ -239,6 +283,12 @@ export const idlFactory = ({ IDL }) => {
     'maxHPExceeded' : IDL.Null,
     'alreadyFullHP' : IDL.Null,
   });
+  const DungeonResult = IDL.Record({
+    'unspentStatPoints' : IDL.Nat,
+    'newLevel' : IDL.Nat,
+    'xpEarned' : IDL.Nat,
+    'characterId' : CharacterId,
+  });
   
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -271,7 +321,7 @@ export const idlFactory = ({ IDL }) => {
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'buyItem' : IDL.Func([IDL.Text], [], []),
     'createCharacter' : IDL.Func(
-        [IDL.Text, Realm],
+        [CharacterCreationParams],
         [IDL.Variant({ 'ok' : CharacterId, 'err' : CharacterCreationError })],
         [],
       ),
@@ -299,6 +349,8 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : SetHpError })],
         [],
       ),
+    'spendStatPoints' : IDL.Func([CharacterId, IDL.Nat], [], []),
+    'submitDungeonResult' : IDL.Func([DungeonResult], [], []),
     'uploadItemImage' : IDL.Func([IDL.Text, ExternalBlob], [], []),
   });
 };

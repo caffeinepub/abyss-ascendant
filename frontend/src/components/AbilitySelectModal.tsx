@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { ABILITIES, Ability } from '../data/abilities';
-import { LocalCharacter } from '../hooks/useLocalCharacter';
+import { LocalCharacter } from '../types/game';
 
 interface AbilitySelectModalProps {
   character: LocalCharacter;
-  onPurchase: (abilityId: string) => void;
-  onEquip: (abilityId: string, slotIndex: number) => void;
-  onUnequip: (abilityId: string) => void;
+  onConfirm: (abilities: string[]) => void;
   onClose: () => void;
 }
 
@@ -34,45 +32,33 @@ const ARCHETYPE_COLORS: Record<string, string> = {
 
 export default function AbilitySelectModal({
   character,
-  onPurchase,
-  onEquip,
-  onUnequip,
+  onConfirm,
   onClose,
 }: AbilitySelectModalProps) {
   const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
-  const [pendingEquipAbilityId, setPendingEquipAbilityId] = useState<string | null>(null);
+  // Start with the character's current abilities as the working set
+  const [selectedAbilities, setSelectedAbilities] = useState<string[]>(character.abilities || []);
 
-  // Use the correct field names from the updated LocalCharacter
-  const equippedIds = (character.equippedAbilityIds ?? []).filter(Boolean);
-  const ownedIds = character.ownedAbilityIds ?? [];
-  const availablePoints = character.availableAbilityPoints ?? 0;
+  const totalAbilityPoints = character.abilityPoints;
+  const usedPoints = selectedAbilities.length;
+  const availablePoints = totalAbilityPoints - usedPoints;
 
   const filteredAbilities = selectedArchetype
     ? ABILITIES.filter((a) => a.archetype === selectedArchetype)
     : ABILITIES;
 
-  function handlePurchase(ability: Ability) {
-    if (availablePoints <= 0) return;
-    if (ownedIds.includes(ability.id)) return;
-    onPurchase(ability.id);
-  }
-
-  function handleEquipClick(abilityId: string) {
-    if (equippedIds.includes(abilityId)) {
-      onUnequip(abilityId);
-      setPendingEquipAbilityId(null);
-    } else if (equippedIds.length < 3) {
-      onEquip(abilityId, equippedIds.length);
-      setPendingEquipAbilityId(null);
+  function handleToggleAbility(ability: Ability) {
+    const isSelected = selectedAbilities.includes(ability.id);
+    if (isSelected) {
+      setSelectedAbilities(prev => prev.filter(id => id !== ability.id));
     } else {
-      setPendingEquipAbilityId(abilityId);
+      if (availablePoints <= 0) return;
+      setSelectedAbilities(prev => [...prev, ability.id]);
     }
   }
 
-  function handleSlotReplace(slotIndex: number) {
-    if (!pendingEquipAbilityId) return;
-    onEquip(pendingEquipAbilityId, slotIndex);
-    setPendingEquipAbilityId(null);
+  function handleConfirm() {
+    onConfirm(selectedAbilities);
   }
 
   const archetypes = [...new Set(ABILITIES.map((a) => a.archetype))];
@@ -85,7 +71,7 @@ export default function AbilitySelectModal({
           <div>
             <h2 className="text-xl font-bold text-foreground font-display">Ability Selection</h2>
             <p className="text-sm text-muted mt-0.5">
-              Own abilities and equip up to 3 in your active slots.
+              Select up to {totalAbilityPoints} abilities for your character.
             </p>
           </div>
           <button
@@ -96,11 +82,11 @@ export default function AbilitySelectModal({
           </button>
         </div>
 
-        {/* Ability Points & Equipped Slots */}
+        {/* Ability Points */}
         <div className="p-4 border-b border-border bg-surface-2/50">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-semibold text-foreground uppercase tracking-wider">
-              Ability Points
+              Ability Slots
             </span>
             <span
               className={`text-sm font-bold px-3 py-1 rounded-full ${
@@ -109,34 +95,34 @@ export default function AbilitySelectModal({
                   : 'bg-surface-2 text-muted'
               }`}
             >
-              {availablePoints} available
+              {usedPoints} / {totalAbilityPoints} used
             </span>
           </div>
 
-          {/* Equipped Slots */}
+          {/* Selected abilities preview */}
           <div className="grid grid-cols-3 gap-2">
-            {[0, 1, 2].map((slotIdx) => {
-              const equippedId = equippedIds[slotIdx];
-              const equippedAbility = equippedId
-                ? ABILITIES.find((a) => a.id === equippedId)
-                : null;
-
+            {Array.from({ length: totalAbilityPoints }).map((_, slotIdx) => {
+              const abilityId = selectedAbilities[slotIdx];
+              const ability = abilityId ? ABILITIES.find(a => a.id === abilityId) : null;
               return (
                 <div
                   key={slotIdx}
                   className={`rounded-lg border p-2 text-center text-xs ${
-                    equippedAbility
+                    ability
                       ? 'border-primary/40 bg-primary/5'
                       : 'border-dashed border-border/50 bg-surface-2/50'
                   }`}
                 >
-                  {equippedAbility ? (
+                  {ability ? (
                     <>
-                      <div className="text-xl">{equippedAbility.icon}</div>
-                      <div className="font-medium text-foreground mt-0.5 truncate">
-                        {equippedAbility.name}
-                      </div>
-                      <div className="text-muted">⏱ {equippedAbility.cooldown}s</div>
+                      <div className="text-xl">{ability.icon}</div>
+                      <div className="font-medium text-foreground mt-0.5 truncate">{ability.name}</div>
+                      <button
+                        onClick={() => handleToggleAbility(ability)}
+                        className="text-xs text-red-400 hover:text-red-300 mt-1"
+                      >
+                        Remove
+                      </button>
                     </>
                   ) : (
                     <div className="text-muted py-2">Slot {slotIdx + 1} — Empty</div>
@@ -145,45 +131,16 @@ export default function AbilitySelectModal({
               );
             })}
           </div>
-
-          {/* Slot replace prompt */}
-          {pendingEquipAbilityId && (
-            <div className="mt-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-              <p className="text-xs text-amber-400 mb-2 font-semibold">
-                All slots full — choose a slot to replace:
-              </p>
-              <div className="flex gap-2">
-                {equippedIds.map((id, idx) => {
-                  const ab = ABILITIES.find((a) => a.id === id);
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => handleSlotReplace(idx)}
-                      className="flex-1 text-xs py-1.5 rounded bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 font-semibold transition-all"
-                    >
-                      Replace {ab?.name ?? `Slot ${idx + 1}`}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setPendingEquipAbilityId(null)}
-                  className="px-3 text-xs py-1.5 rounded bg-surface-2 text-muted hover:bg-surface-2/80"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Archetype Filter */}
-        <div className="p-3 border-b border-border flex gap-2 flex-wrap">
+        <div className="px-4 pt-3 pb-2 flex gap-2 flex-wrap border-b border-border">
           <button
             onClick={() => setSelectedArchetype(null)}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-              !selectedArchetype
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-surface-2 text-muted hover:text-foreground'
+            className={`text-xs px-3 py-1 rounded-full border transition-all ${
+              selectedArchetype === null
+                ? 'bg-primary/20 text-primary border-primary/40'
+                : 'border-border text-muted hover:text-foreground'
             }`}
           >
             All
@@ -192,13 +149,13 @@ export default function AbilitySelectModal({
             <button
               key={arch}
               onClick={() => setSelectedArchetype(arch === selectedArchetype ? null : arch)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+              className={`text-xs px-3 py-1 rounded-full border transition-all ${
                 selectedArchetype === arch
-                  ? ARCHETYPE_COLORS[arch] ?? 'bg-primary text-primary-foreground'
-                  : 'bg-surface-2 text-muted hover:text-foreground border-transparent'
+                  ? `${ARCHETYPE_COLORS[arch] || 'bg-primary/20 text-primary border-primary/40'}`
+                  : 'border-border text-muted hover:text-foreground'
               }`}
             >
-              {ARCHETYPE_LABELS[arch] ?? arch}
+              {ARCHETYPE_LABELS[arch] || arch}
             </button>
           ))}
         </div>
@@ -206,75 +163,63 @@ export default function AbilitySelectModal({
         {/* Ability List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {filteredAbilities.map((ability) => {
-            const isOwned = ownedIds.includes(ability.id);
-            const isEquipped = equippedIds.includes(ability.id);
-            const archetypeColor = ARCHETYPE_COLORS[ability.archetype] ?? '';
+            const isSelected = selectedAbilities.includes(ability.id);
+            const canSelect = availablePoints > 0 || isSelected;
 
             return (
               <div
                 key={ability.id}
-                className={`rounded-lg border p-3 transition-all ${
-                  isEquipped
-                    ? 'border-primary/50 bg-primary/5'
-                    : isOwned
-                    ? 'border-border bg-surface-2'
-                    : 'border-border/50 bg-surface-2/50 opacity-80'
+                onClick={() => handleToggleAbility(ability)}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                  isSelected
+                    ? 'border-primary/50 bg-primary/10'
+                    : canSelect
+                    ? 'border-border hover:border-primary/30 hover:bg-surface-2'
+                    : 'border-border opacity-50 cursor-not-allowed'
                 }`}
               >
-                <div className="flex items-start gap-3">
-                  <div className="text-2xl">{ability.icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm text-foreground">{ability.name}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${archetypeColor}`}>
-                        {ARCHETYPE_LABELS[ability.archetype] ?? ability.archetype}
-                      </span>
-                      {isEquipped && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30">
-                          Equipped
-                        </span>
-                      )}
-                      {isOwned && !isEquipped && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
-                          Owned
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted mt-0.5">{ability.description}</p>
-                    <div className="flex gap-3 mt-1 text-xs text-muted">
-                      <span>⏱ {ability.cooldown}s</span>
-                      <span>📊 {ability.statScaling.toUpperCase()} scaling</span>
-                      <span>×{ability.damageMultiplier} {ability.damageType} dmg</span>
-                    </div>
+                <span className="text-2xl">{ability.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm text-foreground">{ability.name}</span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full border ${
+                        ARCHETYPE_COLORS[ability.archetype] || 'text-muted border-border'
+                      }`}
+                    >
+                      {ARCHETYPE_LABELS[ability.archetype] || ability.archetype}
+                    </span>
                   </div>
-
-                  <div className="flex flex-col gap-1.5 shrink-0">
-                    {!isOwned && (
-                      <button
-                        onClick={() => handlePurchase(ability)}
-                        disabled={availablePoints <= 0}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                      >
-                        Learn (1pt)
-                      </button>
-                    )}
-                    {isOwned && (
-                      <button
-                        onClick={() => handleEquipClick(ability.id)}
-                        className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                          isEquipped
-                            ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                            : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                        }`}
-                      >
-                        {isEquipped ? 'Unequip' : 'Equip'}
-                      </button>
+                  <p className="text-xs text-muted mt-0.5">{ability.description}</p>
+                  <div className="flex gap-3 mt-1 text-xs text-muted">
+                    <span>⏱ CD: {ability.cooldown}t</span>
+                    {ability.damageMultiplier && (
+                      <span>⚔ {ability.damageMultiplier}x dmg</span>
                     )}
                   </div>
                 </div>
+                {isSelected && (
+                  <span className="text-primary text-xs font-bold shrink-0">✓ Selected</span>
+                )}
               </div>
             );
           })}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-border flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg bg-surface-2 text-muted hover:text-foreground text-sm font-medium transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-all"
+          >
+            Confirm Selection
+          </button>
         </div>
       </div>
     </div>

@@ -1,26 +1,66 @@
 import Map "mo:core/Map";
-import Array "mo:core/Array";
 import List "mo:core/List";
 import Principal "mo:core/Principal";
+import Iter "mo:core/Iter";
+import Text "mo:core/Text";
 import Runtime "mo:core/Runtime";
 import Nat8 "mo:core/Nat8";
-import Text "mo:core/Text";
-import Iter "mo:core/Iter";
-import MixinStorage "blob-storage/Mixin";
+import Nat "mo:core/Nat";
 import Storage "blob-storage/Storage";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
-import Migration "migration";
+import MixinStorage "blob-storage/Mixin";
 
-(with migration = Migration.run)
+
+
 actor {
+  let maxStats = 100;
+  let maxLevel = 50;
+  let baseStat = 1;
+
+  var nextCharacterId : Nat8 = 0;
+  var currentSeason = 1;
+
+  type CharacterId = Nat8;
+  type CharacterIds = CharacterId;
+  type CharacterSlot = { id : CharacterId; character : Character };
+  type CharStorage = Map.Map<CharacterIds, Character>;
+  type CharSlotStorage = List.List<CharacterSlot>;
+  type CharPersistentStorage = Map.Map<Principal, CharSlotStorage>;
+  type ItemPersistentStorage = Map.Map<Text, Item>;
+  type MarketplaceStorage = Map.Map<Text, MarketplaceListing>;
+  type ItemArray = [Item];
+
+  var characters : CharPersistentStorage = Map.empty<Principal, CharSlotStorage>();
+  var items : ItemPersistentStorage = Map.empty<Text, Item>();
+  var marketplace : MarketplaceStorage = Map.empty<Text, MarketplaceListing>();
+
+  let accessControlState = AccessControl.initState();
+  include MixinAuthorization(accessControlState);
+
+  let itemImages = Map.empty<Text, Storage.ExternalBlob>();
+  let userProfiles = Map.empty<Principal, UserProfile>();
+
+  include MixinStorage();
+
   public type UserProfile = { username : Text };
 
   public type Realm = { #Softcore; #Hardcore };
   public type CharacterStatus = { #Alive; #Dead };
 
-  public type ItemType = { #Weapon; #Armor; #Trinket };
-  public type Rarity = { #Common; #Uncommon; #Rare; #Legendary };
+  public type BaseStats = {
+    str : Nat;
+    dex : Nat;
+    int : Nat;
+    vit : Nat;
+  };
+
+  public type AdvancedStats = {
+    maxHP : Nat;
+    currentHP : Nat;
+    critChance : Nat;
+    critPower : Nat;
+  };
 
   public type Character = {
     name : Text;
@@ -30,13 +70,14 @@ actor {
     xp : Nat;
     season : Nat;
     status : CharacterStatus;
-    str : Nat;
-    dex : Nat;
-    int : Nat;
-    vit : Nat;
-    maxHP : Nat;
-    currentHP : Nat;
+    baseStats : BaseStats;
+    advancedStats : AdvancedStats;
+    totalStatPointsEarned : Nat;
+    totalStatPointsSpent : Nat;
   };
+
+  public type ItemType = { #Weapon; #Armor; #Trinket };
+  public type Rarity = { #Common; #Uncommon; #Rare; #Legendary };
 
   public type Item = {
     id : Text;
@@ -60,6 +101,15 @@ actor {
     active : Bool;
   };
 
+  public type CharacterCreationParams = {
+    name : Text;
+    realm : Realm;
+    str : Nat;
+    dex : Nat;
+    int : Nat;
+    vit : Nat;
+  };
+
   public type CharacterCreationError = { #alreadyExists; #noPermission; #limitReached };
   public type SetHpError = {
     #characterNotFound;
@@ -68,27 +118,16 @@ actor {
     #maxHPExceeded;
   };
 
-  type CharacterId = Nat8;
-  type CharacterSlot = { id : CharacterId; character : Character };
-  type CharacterIds = CharacterId;
-  public type CharStorage = Map.Map<CharacterIds, Character>;
-  type CharSlotStorage = List.List<CharacterSlot>;
-  type CharPersistentStorage = Map.Map<Principal, CharSlotStorage>;
-  type ItemPersistentStorage = Map.Map<Text, Item>;
-  type MarketplaceStorage = Map.Map<Text, MarketplaceListing>;
-  type ItemArray = [Item];
+  public type DungeonResult = {
+    characterId : CharacterId;
+    xpEarned : Nat;
+    newLevel : Nat;
+    unspentStatPoints : Nat;
+  };
 
-  var currentSeason = 1;
-  var nextCharacterId : Nat8 = 0;
-  var characters : CharPersistentStorage = Map.empty<Principal, CharSlotStorage>();
-  var items : ItemPersistentStorage = Map.empty<Text, Item>();
-  var marketplace : MarketplaceStorage = Map.empty<Text, MarketplaceListing>();
-
-  let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
-  let itemImages = Map.empty<Text, Storage.ExternalBlob>();
-  let userProfiles = Map.empty<Principal, UserProfile>();
-  include MixinStorage();
+  func getUnspentStatPoints(character : Character) : Nat {
+    character.totalStatPointsEarned - character.totalStatPointsSpent;
+  };
 
   func getNextCharacterId() : CharacterId {
     let newId = nextCharacterId;
@@ -117,7 +156,71 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  public shared ({ caller }) func createCharacter(name : Text, realm : Realm) : async {
+  public shared ({ caller }) func submitDungeonResult(result : DungeonResult) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can submit dungeon results");
+    };
+
+    switch (characters.get(caller)) {
+      case (null) { Runtime.trap("Character not found for caller") };
+      case (?characterSlots) {
+        let maybeCharacter = characterSlots.toArray().find(func(slot) { slot.id == result.characterId });
+        switch (maybeCharacter) {
+          case (null) { Runtime.trap("Character ID not found for caller") };
+          case (?_) {
+            let updatedCharacterSlots = characterSlots.map<CharacterSlot, CharacterSlot>(
+              func(slot) {
+                if (slot.id == result.characterId) {
+                  let updatedCharacter : Character = {
+                    slot.character with xp = result.xpEarned;
+                    level = result.newLevel;
+                    totalStatPointsEarned = (result.newLevel - 1);
+                  };
+                  { slot with character = updatedCharacter };
+                } else {
+                  slot;
+                };
+              }
+            );
+            characters.add(caller, updatedCharacterSlots);
+          };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func spendStatPoints(characterId : CharacterId, pointsSpent : Nat) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can spend stat points");
+    };
+
+    switch (characters.get(caller)) {
+      case (null) { Runtime.trap("Character not found for caller") };
+      case (?characterSlots) {
+        let maybeCharacter = characterSlots.toArray().find(func(slot) { slot.id == characterId });
+        switch (maybeCharacter) {
+          case (null) { Runtime.trap("Character ID not found for caller") };
+          case (?_) {
+            let updatedCharacterSlots = characterSlots.map<CharacterSlot, CharacterSlot>(
+              func(slot) {
+                if (slot.id == characterId) {
+                  let updatedCharacter : Character = {
+                    slot.character with totalStatPointsSpent = pointsSpent;
+                  };
+                  { slot with character = updatedCharacter };
+                } else {
+                  slot;
+                };
+              }
+            );
+            characters.add(caller, updatedCharacterSlots);
+          };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func createCharacter(params : CharacterCreationParams) : async {
     #ok : CharacterId;
     #err : CharacterCreationError;
   } {
@@ -125,33 +228,51 @@ actor {
       return #err(#noPermission);
     };
 
-    let existingCharacters = switch (characters.get(caller)) {
-      case (null) { List.empty<CharacterSlot>() };
-      case (?chars) { chars };
+    switch (characters.get(caller)) {
+      case (null) {
+        characters.add(caller, List.empty<CharacterSlot>());
+      };
+      case (?existingCharacters) {
+        if (existingCharacters.size() >= 8) { return #err(#limitReached) };
+      };
     };
-    if (existingCharacters.size() >= 8) { return #err(#limitReached) };
 
     let newCharacter : Character = {
-      name;
-      realm;
+      name = params.name;
+      realm = params.realm;
       classTier = 1;
       level = 1;
       xp = 0;
       season = currentSeason;
       status = #Alive;
-      str = 1;
-      dex = 1;
-      int = 1;
-      vit = 1;
-      maxHP = 20;
-      currentHP = 20;
+      baseStats = {
+        str = params.str;
+        dex = params.dex;
+        int = params.int;
+        vit = params.vit;
+      };
+      advancedStats = {
+        maxHP = 20;
+        currentHP = 20;
+        critChance = 5;
+        critPower = 10;
+      };
+      totalStatPointsEarned = 0;
+      totalStatPointsSpent = 0;
     };
 
     let newId = getNextCharacterId();
     let newSlot : CharacterSlot = { id = newId; character = newCharacter };
-    let updatedCharacters = List.fromArray<CharacterSlot>(existingCharacters.toArray());
-    updatedCharacters.add(newSlot);
-    characters.add(caller, updatedCharacters);
+    switch (characters.get(caller)) {
+      case (null) {
+        characters.add(caller, List.fromArray<CharacterSlot>([newSlot]));
+      };
+      case (?existingCharacters) {
+        let updatedCharacters = List.fromArray<CharacterSlot>(existingCharacters.toArray());
+        updatedCharacters.add(newSlot);
+        characters.add(caller, updatedCharacters);
+      };
+    };
     #ok(newId);
   };
 
@@ -166,21 +287,27 @@ actor {
     switch (characters.get(caller)) {
       case (null) { #err(#characterNotFound) };
       case (?characterSlots) {
-        var found = false;
+        let character = switch (characterSlots.toArray().find(func(slot) { slot.id == characterId })) {
+          case (null) { return #err(#characterNotFound) };
+          case (?slot) { slot.character };
+        };
+        if (hp > character.advancedStats.maxHP) {
+          return #err(#maxHPExceeded);
+        };
         let updatedSlotsArray = characterSlots.toArray().map(
           func(slot) {
             if (slot.id == characterId) {
-              found := true;
-              let character = slot.character;
-              if (hp > character.maxHP) {
-                return { slot with character = { character with currentHP = character.maxHP } };
+              let updatedCharacter = {
+                slot.character with advancedStats = {
+                  slot.character.advancedStats with currentHP = hp;
+                };
               };
-              return { slot with character = { character with currentHP = hp } };
+              { slot with character = updatedCharacter };
+            } else {
+              slot;
             };
-            slot;
           }
         );
-        if (not found) { return #err(#characterNotFound) };
         let updatedSlots = List.fromArray<CharacterSlot>(updatedSlotsArray);
         characters.add(caller, updatedSlots);
         #ok(());
@@ -210,6 +337,9 @@ actor {
   };
 
   public query ({ caller }) func getCharacters() : async [Character] {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can retrieve their characters");
+    };
     switch (characters.get(caller)) {
       case (null) { [] };
       case (?chars) {
@@ -231,22 +361,20 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Only authenticated users can list items for sale");
     };
-
-    let item = switch (items.get(itemId)) {
+    switch (items.get(itemId)) {
       case (null) { Runtime.trap("Item does not exist") };
-      case (?item) { item };
+      case (?item) {
+        if (item.owner != caller) { Runtime.trap("Not item owner") };
+
+        let listing : MarketplaceListing = {
+          item;
+          price;
+          seller = caller;
+          active = true;
+        };
+        marketplace.add(itemId, listing);
+      };
     };
-
-    if (item.owner != caller) { Runtime.trap("Not item owner") };
-
-    let listing : MarketplaceListing = {
-      item;
-      price;
-      seller = caller;
-      active = true;
-    };
-
-    marketplace.add(itemId, listing);
   };
 
   public shared ({ caller }) func buyItem(itemId : Text) : async () {

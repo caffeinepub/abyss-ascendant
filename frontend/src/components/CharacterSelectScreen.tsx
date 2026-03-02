@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Character, CharacterId, Realm } from '../backend';
-import { useGetCharacters, useDeleteCharacter } from '../hooks/useQueries';
-import { Sword, Shield, Skull, Plus, Trash2, ChevronRight, Users, AlertTriangle } from 'lucide-react';
+import { Character } from '../backend';
+import { useDeleteCharacter } from '../hooks/useQueries';
+import HealthBar from './HealthBar';
+import { calculateMaxHp } from '../types/game';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,266 +13,280 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Trash2, Loader2, Plus, Shield, Sword, Skull, AlertTriangle, RefreshCw, LogIn } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface CharacterWithId {
-  id: CharacterId;
+  id: number;
   character: Character;
 }
 
 interface CharacterSelectScreenProps {
-  onSelectCharacter: (characterId: CharacterId, character: Character) => void;
+  characters: CharacterWithId[];
+  onSelectCharacter: (characterId: number, character: Character) => void;
   onCreateCharacter: () => void;
-}
-
-const MAX_CHARACTERS = 8;
-
-function getRealmColor(realm: Realm) {
-  return realm === 'Hardcore' ? 'text-red-400' : 'text-blue-400';
-}
-
-function getRealmBg(realm: Realm) {
-  return realm === 'Hardcore' ? 'bg-red-900/30 border-red-700/40' : 'bg-blue-900/30 border-blue-700/40';
-}
-
-function getClassTierLabel(tier: number) {
-  const tiers: Record<number, string> = {
-    1: 'Novice',
-    2: 'Apprentice',
-    3: 'Journeyman',
-    4: 'Expert',
-    5: 'Master',
-  };
-  return tiers[tier] ?? `Tier ${tier}`;
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
 }
 
 export default function CharacterSelectScreen({
+  characters,
   onSelectCharacter,
   onCreateCharacter,
+  isLoading = false,
+  isError = false,
+  onRetry,
 }: CharacterSelectScreenProps) {
-  const { data: rawCharacters, isLoading } = useGetCharacters();
-  const deleteCharacter = useDeleteCharacter();
-  const [deleteTarget, setDeleteTarget] = useState<{ id: CharacterId; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
+  const deleteCharacterMutation = useDeleteCharacter();
 
-  // The backend returns Character[] but we need IDs. We'll use index-based IDs from the query.
-  // Since getCharacters() doesn't return IDs, we need to track them differently.
-  // We'll use a separate approach: store characters with their index as a proxy ID.
-  // Actually, looking at the backend, getCharacters() returns Character[] without IDs.
-  // We need to use a workaround - we'll use the character name + realm as a key for display,
-  // but for deletion we need the actual CharacterId.
-  // The backend stores CharacterSlot { id, character } but only returns Character[].
-  // We need to get IDs somehow. Let's use a separate query approach.
-  // For now, we'll use the character index as a display key and note this as a backend gap.
-
-  const characters = rawCharacters ?? [];
-  const atCap = characters.length >= MAX_CHARACTERS;
+  const atCharacterLimit = characters.length >= 8;
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteCharacter.mutateAsync(deleteTarget.id);
-    } catch (err) {
-      console.error('Delete failed:', err);
+      await deleteCharacterMutation.mutateAsync(deleteTarget.id);
+    } catch {
+      // error handled silently; query invalidation will refresh the list
     } finally {
       setDeleteTarget(null);
     }
   };
 
-  return (
-    <TooltipProvider>
-      <div className="min-h-screen bg-background flex flex-col">
-        {/* Header */}
-        <div className="border-b border-border bg-surface-1 px-6 py-4">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img src="/assets/generated/logo-sigil.dim_256x256.png" alt="Abyss Ascendant" className="w-8 h-8 opacity-80" />
-              <div>
-                <h1 className="text-xl font-bold text-foreground font-display">Abyss Ascendant</h1>
-                <p className="text-xs text-muted">Select your adventurer</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted">
-              <Users className="w-4 h-4" />
-              <span>{characters.length} / {MAX_CHARACTERS}</span>
-            </div>
-          </div>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+          <p className="text-muted-foreground font-display">Loading characters...</p>
         </div>
+      </div>
+    );
+  }
 
-        {/* Content */}
-        <div className="flex-1 max-w-4xl mx-auto w-full px-6 py-8">
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Your Characters</h2>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <button
-                    onClick={onCreateCharacter}
-                    disabled={atCap}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
-                      ${atCap
-                        ? 'bg-surface-2 text-muted cursor-not-allowed opacity-60'
-                        : 'bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95'
-                      }`}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create New Character
-                  </button>
-                </span>
-              </TooltipTrigger>
-              {atCap && (
-                <TooltipContent>
-                  <p>Maximum 8 characters reached</p>
-                </TooltipContent>
-              )}
-            </Tooltip>
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-6 text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+            <AlertTriangle className="w-8 h-8 text-destructive" />
           </div>
-
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map(i => (
-                <Skeleton key={i} className="h-24 w-full rounded-xl" />
-              ))}
-            </div>
-          ) : characters.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <Sword className="w-16 h-16 text-muted mb-4 opacity-40" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">No Characters Yet</h3>
-              <p className="text-muted text-sm mb-6">Create your first adventurer to begin your descent into the Abyss.</p>
-              <button
-                onClick={onCreateCharacter}
-                className="flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-all active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                Create Character
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {characters.map((character, index) => {
-                const isAlive = character.status === 'Alive' || (character.status as unknown as { __kind__: string }).__kind__ === 'Alive';
-                const isHardcore = character.realm === 'Hardcore' || (character.realm as unknown as { __kind__: string }).__kind__ === 'Hardcore';
-                const realmLabel = isHardcore ? 'Hardcore' : 'Softcore';
-                const realmEnum = isHardcore ? Realm.Hardcore : Realm.Softcore;
-                const level = Number(character.level);
-                const classTier = Number(character.classTier);
-                const currentHP = Number(character.currentHP);
-                const maxHP = Number(character.maxHP);
-                const hpPercent = maxHP > 0 ? (currentHP / maxHP) * 100 : 0;
-
-                return (
-                  <div
-                    key={index}
-                    className={`relative group rounded-xl border p-4 transition-all cursor-pointer
-                      ${isAlive
-                        ? `${getRealmBg(realmEnum)} hover:border-primary/60 hover:bg-surface-2`
-                        : 'bg-surface-1 border-border opacity-60'
-                      }`}
-                    onClick={() => isAlive && onSelectCharacter(index as CharacterId, character)}
-                  >
-                    <div className="flex items-center gap-4">
-                      {/* Icon */}
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0
-                        ${isAlive ? 'bg-surface-2' : 'bg-surface-1'}`}>
-                        {isAlive ? (
-                          isHardcore ? (
-                            <Shield className="w-6 h-6 text-red-400" />
-                          ) : (
-                            <Sword className="w-6 h-6 text-blue-400" />
-                          )
-                        ) : (
-                          <Skull className="w-6 h-6 text-muted" />
-                        )}
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-foreground truncate">{character.name}</span>
-                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${getRealmColor(realmEnum)} bg-surface-2`}>
-                            {realmLabel}
-                          </span>
-                          {!isAlive && (
-                            <span className="text-xs font-medium px-1.5 py-0.5 rounded text-red-400 bg-red-900/20">
-                              Dead
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted">
-                          <span>Level {level}</span>
-                          <span>·</span>
-                          <span>{getClassTierLabel(classTier)}</span>
-                          {isAlive && (
-                            <>
-                              <span>·</span>
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-16 h-1.5 bg-surface-2 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all ${
-                                      hpPercent > 60 ? 'bg-health-high' : hpPercent > 30 ? 'bg-health-mid' : 'bg-health-low'
-                                    }`}
-                                    style={{ width: `${hpPercent}%` }}
-                                  />
-                                </div>
-                                <span>{currentHP}/{maxHP} HP</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button
-                          onClick={e => {
-                            e.stopPropagation();
-                            setDeleteTarget({ id: index as CharacterId, name: character.name });
-                          }}
-                          className="p-2 rounded-lg text-muted hover:text-red-400 hover:bg-red-900/20 transition-all opacity-0 group-hover:opacity-100"
-                          title="Delete character"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        {isAlive && (
-                          <ChevronRight className="w-5 h-5 text-muted group-hover:text-primary transition-colors" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div>
+            <h2 className="font-display text-xl text-foreground mb-2">Could Not Load Characters</h2>
+            <p className="text-muted-foreground text-sm">
+              There was a problem connecting to the server. Please check your connection and try again.
+            </p>
+          </div>
+          {onRetry && (
+            <Button onClick={onRetry} variant="outline" className="gap-2">
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </Button>
           )}
         </div>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
-          <AlertDialogContent className="bg-surface-1 border-border">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2 text-foreground">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
-                Delete Character
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-muted">
-                Are you sure you want to permanently delete <strong className="text-foreground">{deleteTarget?.name}</strong>?
-                This action cannot be undone. All progress, items, and data for this character will be lost forever.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel className="bg-surface-2 border-border text-foreground hover:bg-surface-2/80">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteConfirm}
-                disabled={deleteCharacter.isPending}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                {deleteCharacter.isPending ? 'Deleting...' : 'Delete Forever'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
-    </TooltipProvider>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-start py-10 px-4">
+      <div className="w-full max-w-2xl">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <img
+            src="/assets/generated/logo-sigil.dim_256x256.png"
+            alt="Logo"
+            className="w-20 h-20 mx-auto mb-4 opacity-90"
+          />
+          <h1 className="font-display text-4xl text-primary mb-2">Select Character</h1>
+          <p className="text-muted-foreground text-sm">
+            {characters.length === 0
+              ? 'No characters yet. Create your first adventurer!'
+              : `${characters.length} / 8 character slots used`}
+          </p>
+        </div>
+
+        {/* Character List */}
+        <div className="space-y-3 mb-6">
+          {characters.map(({ id, character }) => {
+            const isDead = (character.status as string) === 'Dead';
+            const isHardcore = (character.realm as string) === 'Hardcore';
+
+            // Compute maxHP from the character's Vitality stat using the same formula
+            // as the combat engine (vit * 10 + 50). This ensures the select screen
+            // shows the correct HP instead of the backend's hardcoded 20.
+            const vit = character.baseStats
+              ? Number(character.baseStats.vit)
+              : Number((character as any).vit ?? 1);
+            const maxHP = calculateMaxHp(vit);
+
+            // Read persisted currentHP from backend, clamped to the computed maxHP
+            const storedCurrentHP = character.advancedStats
+              ? Number(character.advancedStats.currentHP)
+              : Number((character as any).currentHP ?? maxHP);
+            const currentHP = Math.min(storedCurrentHP, maxHP);
+
+            return (
+              <div
+                key={id}
+                className={`relative flex flex-col bg-surface-1 border rounded-xl p-4 transition-all ${
+                  isDead
+                    ? 'border-destructive/30 opacity-60'
+                    : 'border-border hover:border-primary/50 hover:bg-surface-2'
+                }`}
+              >
+                {/* Top row: icon + info + delete */}
+                <div className="flex items-center gap-4">
+                  {/* Class Icon */}
+                  <div
+                    className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
+                      isDead ? 'bg-destructive/20' : 'bg-primary/20'
+                    }`}
+                  >
+                    {isDead ? (
+                      <Skull className="w-6 h-6 text-destructive" />
+                    ) : isHardcore ? (
+                      <Sword className="w-6 h-6 text-primary" />
+                    ) : (
+                      <Shield className="w-6 h-6 text-primary" />
+                    )}
+                  </div>
+
+                  {/* Character Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-display text-lg text-foreground font-semibold truncate">
+                        {character.name}
+                      </span>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${
+                          isHardcore
+                            ? 'border-destructive/50 text-destructive bg-destructive/10'
+                            : 'border-primary/50 text-primary bg-primary/10'
+                        }`}
+                      >
+                        {isHardcore ? '⚔ HC' : '🛡 SC'}
+                      </span>
+                      {isDead && (
+                        <span className="text-xs px-2 py-0.5 rounded-full border border-destructive/50 text-destructive bg-destructive/10 shrink-0">
+                          DEAD
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-2">
+                      Level {Number(character.level)} · Tier {Number(character.classTier)}
+                    </div>
+                    {!isDead && <HealthBar currentHP={currentHP} maxHP={maxHP} compact />}
+                  </div>
+
+                  {/* Delete Button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget({ id, name: character.name });
+                    }}
+                    disabled={deleteCharacterMutation.isPending}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* Enter The Realm button — only for living characters */}
+                {!isDead && (
+                  <div className="mt-3 pt-3 border-t border-border/50">
+                    <Button
+                      className="w-full gap-2 font-display"
+                      size="sm"
+                      onClick={() => onSelectCharacter(id, character)}
+                    >
+                      <LogIn className="w-4 h-4" />
+                      Enter The Realm
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Create New Character Button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="w-full">
+                <Button
+                  onClick={onCreateCharacter}
+                  disabled={atCharacterLimit}
+                  className="w-full gap-2"
+                  size="lg"
+                  variant="outline"
+                >
+                  <Plus className="w-5 h-5" />
+                  Create New Character
+                </Button>
+              </div>
+            </TooltipTrigger>
+            {atCharacterLimit && (
+              <TooltipContent>
+                <p>Maximum of 8 characters reached</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Character</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete{' '}
+              <span className="font-semibold text-foreground">{deleteTarget?.name}</span>? This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteCharacterMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Footer */}
+      <footer className="mt-auto pt-10 pb-6 text-muted-foreground text-xs text-center">
+        © {new Date().getFullYear()} Dungeon Realm · Built with ❤️ using{' '}
+        <a
+          href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-foreground"
+        >
+          caffeine.ai
+        </a>
+      </footer>
+    </div>
   );
 }

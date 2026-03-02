@@ -1,12 +1,10 @@
 # Specification
 
 ## Summary
-**Goal:** Grant new characters starter equipment at creation time and replace the non-functional drop rate slider in the Dungeon Select screen with a static informational display.
+**Goal:** Fix the non-functional "Enter The Realm" button in `CharacterSelectScreen.tsx` so that clicking it with a selected character correctly triggers navigation.
 
 **Planned changes:**
-- At character creation, automatically generate and equip a level 1 Common weapon and a level 1 Common armor piece using the existing `lootGenerator.ts` logic, placing them directly into the character's equipped weapon and armor slots.
-- Ensure the starter weapon provides meaningful base physical damage (well above 1 damage per hit vs. level 1 monsters) and the starter armor provides meaningful base defense (noticeably reducing incoming ~13 damage from level 1 monsters).
-- Remove the non-functional drop rate scroller/slider from `DungeonSelectScreen.tsx`.
-- Replace it with a static read-only text display showing the effective drop rate and XP rate for the selected monster level, calculated from the existing formula (6% base, −1% per level the monster is below the player, floor 0%).
+- In `CharacterSelectScreen.tsx`: audit and fix the `onClick` handler on the "Enter The Realm" button — ensure it is not conditionally disabled, is always rendered with an `onClick`, correctly calls `onSelectCharacter` with the selected character's ID, is never blocked by `pointer-events-none` or `stopPropagation`, and that the selected character state is non-null when clicked.
+- In `App.tsx`: audit and fix the `onSelectCharacter` callback — ensure it is defined (never `undefined`) at render time, correctly writes the selected character ID into app-level state, immediately transitions routing state to the character sheet/dungeon select screen, and that no loading flag or guard silently blocks the screen transition after the callback fires.
 
-**User-visible outcome:** New characters always start with a weapon and armor equipped so early combat is viable. The Dungeon Select screen no longer shows a broken slider, instead cleanly displaying the calculated drop rate and XP rate as informational text.
+**User-visible outcome:** Clicking "Enter The Realm" with a character selected immediately navigates to the character sheet or dungeon select screen on the first click, with no blank screen, spinner, or silence.

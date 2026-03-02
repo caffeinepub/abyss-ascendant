@@ -1,222 +1,251 @@
 import React, { useState } from 'react';
 import { Realm } from '../backend';
-import { useCreateCharacter, CharacterAlreadyExistsError, CharacterLimitReachedError } from '../hooks/useQueries';
-import { generateStarterEquipment } from '../engine/lootGenerator';
-import { saveStarterEquipmentForCharacter } from '../hooks/useLocalCharacter';
-
-interface LocalStats {
-  str: number;
-  dex: number;
-  int: number;
-  vit: number;
-}
+import {
+  useCreateCharacter,
+  useDeleteCharacter,
+  CharacterLimitReachedError,
+} from '../hooks/useQueries';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Trash2, Loader2, Shield, Sword, Plus } from 'lucide-react';
+import { Character } from '../backend';
 
 interface CharacterCreationProps {
-  onCharacterCreated: () => void;
-  onAlreadyExists?: () => void;
+  onCharacterCreated: (characterId: number) => void;
+  onBack?: () => void;
+  existingCharacters?: Character[];
+  onCancel?: () => void;
 }
 
 const TOTAL_STAT_POINTS = 8;
 
-export default function CharacterCreation({ onCharacterCreated, onAlreadyExists }: CharacterCreationProps) {
+export default function CharacterCreation({
+  onCharacterCreated,
+  onBack,
+  existingCharacters = [],
+  onCancel,
+}: CharacterCreationProps) {
   const [name, setName] = useState('');
   const [realm, setRealm] = useState<Realm>(Realm.Softcore);
-  const [stats, setStats] = useState<LocalStats>({ str: 1, dex: 1, int: 1, vit: 1 });
+  const [statPoints, setStatPoints] = useState({ str: 1, dex: 1, int: 1, vit: 1 });
   const [error, setError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
 
   const createCharacterMutation = useCreateCharacter();
+  const deleteCharacterMutation = useDeleteCharacter();
 
-  const basePoints = 4;
-  const spentPoints = stats.str + stats.dex + stats.int + stats.vit - basePoints;
-  const remainingPoints = TOTAL_STAT_POINTS - spentPoints;
+  // Points used above the base of 1 per stat
+  const usedPoints =
+    statPoints.str - 1 + statPoints.dex - 1 + statPoints.int - 1 + statPoints.vit - 1;
+  const remainingPoints = TOTAL_STAT_POINTS - usedPoints;
 
-  function incrementStat(stat: keyof LocalStats) {
+  const incrementStat = (stat: keyof typeof statPoints) => {
     if (remainingPoints <= 0) return;
-    setStats((prev) => ({ ...prev, [stat]: prev[stat] + 1 }));
-  }
+    setStatPoints((prev) => ({ ...prev, [stat]: prev[stat] + 1 }));
+  };
 
-  function decrementStat(stat: keyof LocalStats) {
-    if (stats[stat] <= 1) return;
-    setStats((prev) => ({ ...prev, [stat]: prev[stat] - 1 }));
-  }
+  const decrementStat = (stat: keyof typeof statPoints) => {
+    if (statPoints[stat] <= 1) return;
+    setStatPoints((prev) => ({ ...prev, [stat]: prev[stat] - 1 }));
+  };
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-
+  const handleCreate = async () => {
     if (!name.trim()) {
       setError('Please enter a character name.');
       return;
     }
-    if (name.trim().length < 2 || name.trim().length > 20) {
-      setError('Name must be between 2 and 20 characters.');
+    if (remainingPoints !== 0) {
+      setError(
+        `Please allocate all ${TOTAL_STAT_POINTS} stat points (${remainingPoints} remaining).`
+      );
       return;
     }
+    setError('');
 
     try {
       const characterId = await createCharacterMutation.mutateAsync({
         name: name.trim(),
         realm,
+        str: BigInt(statPoints.str),
+        dex: BigInt(statPoints.dex),
+        int: BigInt(statPoints.int),
+        vit: BigInt(statPoints.vit),
       });
 
-      // Generate and persist starter equipment for the new character
-      const { weapon, armor } = generateStarterEquipment();
-      saveStarterEquipmentForCharacter(characterId, [weapon, armor]);
-
-      onCharacterCreated();
-    } catch (err: unknown) {
-      if (err instanceof CharacterAlreadyExistsError) {
-        onAlreadyExists?.();
-        return;
-      }
+      onCharacterCreated(characterId);
+    } catch (err) {
       if (err instanceof CharacterLimitReachedError) {
-        setError('Maximum 8 characters reached. Delete a character to create a new one.');
-        return;
+        setError('You have reached the maximum number of characters (8).');
+      } else {
+        setError('Failed to create character. Please try again.');
       }
-      const msg = err instanceof Error ? err.message : 'Failed to create character.';
-      setError(msg);
     }
-  }
-
-  const statDescriptions: Record<keyof LocalStats, string> = {
-    str: 'Increases physical damage and carry weight.',
-    dex: 'Increases attack speed, dodge, and critical hit chance.',
-    int: 'Increases magic damage and mana pool.',
-    vit: 'Increases maximum HP and defense.',
   };
 
-  const statLabels: Record<keyof LocalStats, string> = {
-    str: 'Strength',
-    dex: 'Dexterity',
-    int: 'Intelligence',
-    vit: 'Vitality',
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteCharacterMutation.mutateAsync(deleteTarget.id);
+    } catch {
+      setError('Failed to delete character. Please try again.');
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
-  const statIcons: Record<keyof LocalStats, string> = {
-    str: '💪',
-    dex: '🏃',
-    int: '🧠',
-    vit: '❤️',
-  };
+  const handleBack = onBack || onCancel;
 
-  const isLoading = createCharacterMutation.isPending;
-  const statKeys = Object.keys(stats) as (keyof LocalStats)[];
+  const statLabels: { key: keyof typeof statPoints; label: string; color: string }[] = [
+    { key: 'str', label: 'Strength', color: 'text-red-400' },
+    { key: 'dex', label: 'Dexterity', color: 'text-green-400' },
+    { key: 'int', label: 'Intelligence', color: 'text-blue-400' },
+    { key: 'vit', label: 'Vitality', color: 'text-yellow-400' },
+  ];
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-start py-10 px-4">
+      <div className="w-full max-w-2xl">
+        {/* Header */}
         <div className="text-center mb-8">
-          <img
-            src="/assets/generated/logo-sigil.dim_256x256.png"
-            alt="Sigil"
-            className="w-20 h-20 mx-auto mb-4 opacity-90"
-          />
-          <h1 className="text-3xl font-bold text-primary tracking-widest uppercase font-display">
-            Create Your Hero
-          </h1>
-          <p className="text-muted mt-2 text-sm">
-            Forge your legend in the depths below.
+          <h1 className="font-display text-4xl text-primary mb-2">Create Character</h1>
+          <p className="text-muted-foreground text-sm">
+            Forge your legend in the realm of darkness
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Character Name */}
-          <div className="bg-surface-1 border border-border rounded-lg p-5">
-            <label className="block text-sm font-semibold text-foreground mb-2 uppercase tracking-wider">
+        {/* Existing Characters with Delete */}
+        {existingCharacters.length > 0 && (
+          <div className="mb-8">
+            <h2 className="font-display text-lg text-foreground mb-3 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary" />
+              Your Characters
+            </h2>
+            <div className="space-y-2">
+              {existingCharacters.map((char, idx) => {
+                const realmStr = char.realm as string;
+                const statusStr = char.status as string;
+                const realmLabel = realmStr === 'Hardcore' ? '⚔ Hardcore' : '🛡 Softcore';
+                const isDead = statusStr === 'Dead';
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between bg-surface-1 border border-border rounded-lg px-4 py-3"
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-display text-foreground font-semibold">
+                        {char.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Lv.{Number(char.level)} · {realmLabel}
+                        {isDead && (
+                          <span className="ml-2 text-destructive font-medium">· Dead</span>
+                        )}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setDeleteTarget({ id: idx, name: char.name })}
+                      disabled={deleteCharacterMutation.isPending}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Creation Form */}
+        <div className="bg-surface-1 border border-border rounded-xl p-6 space-y-6">
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
               Character Name
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your hero's name..."
-              maxLength={20}
-              disabled={isLoading}
-              className="w-full bg-surface-2 border border-border rounded px-3 py-2 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50"
+              placeholder="Enter name..."
+              maxLength={24}
+              className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
 
-          {/* Realm Selection */}
-          <div className="bg-surface-1 border border-border rounded-lg p-5">
-            <label className="block text-sm font-semibold text-foreground mb-3 uppercase tracking-wider">
-              Choose Realm
-            </label>
+          {/* Realm */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Realm</label>
             <div className="grid grid-cols-2 gap-3">
-              {[
-                {
-                  value: Realm.Softcore,
-                  label: 'Softcore',
-                  icon: '🛡️',
-                  desc: 'Death causes XP loss. Your journey continues.',
-                },
-                {
-                  value: Realm.Hardcore,
-                  label: 'Hardcore',
-                  icon: '💀',
-                  desc: 'Death is permanent. One life, one legend.',
-                },
-              ].map((r) => (
+              {[Realm.Softcore, Realm.Hardcore].map((r) => (
                 <button
-                  key={r.value}
-                  type="button"
-                  onClick={() => setRealm(r.value)}
-                  disabled={isLoading}
-                  className={`p-4 rounded-lg border-2 text-left transition-all disabled:opacity-50 ${
-                    realm === r.value
+                  key={r}
+                  onClick={() => setRealm(r)}
+                  className={`flex flex-col items-center gap-1 p-4 rounded-lg border-2 transition-all ${
+                    realm === r
                       ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-surface-2 text-muted hover:border-primary/50'
+                      : 'border-border bg-background text-muted-foreground hover:border-primary/50'
                   }`}
                 >
-                  <div className="text-2xl mb-1">{r.icon}</div>
-                  <div className="font-bold text-sm">{r.label}</div>
-                  <div className="text-xs mt-1 opacity-80">{r.desc}</div>
+                  {r === Realm.Softcore ? (
+                    <Shield className="w-6 h-6" />
+                  ) : (
+                    <Sword className="w-6 h-6" />
+                  )}
+                  <span className="font-display text-sm font-semibold">{r}</span>
+                  <span className="text-xs opacity-70">
+                    {r === Realm.Softcore ? 'Respawn on death' : 'Permanent death'}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Stat Allocation */}
-          <div className="bg-surface-1 border border-border rounded-lg p-5">
-            <div className="flex items-center justify-between mb-4">
-              <label className="text-sm font-semibold text-foreground uppercase tracking-wider">
-                Allocate Stats
-              </label>
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-medium text-foreground">Allocate Stats</label>
               <span
-                className={`text-sm font-bold px-3 py-1 rounded-full ${
-                  remainingPoints > 0
-                    ? 'bg-primary/20 text-primary'
-                    : 'bg-surface-2 text-muted'
+                className={`text-sm font-semibold ${
+                  remainingPoints === 0 ? 'text-green-400' : 'text-primary'
                 }`}
               >
                 {remainingPoints} points remaining
               </span>
             </div>
-
-            <div className="space-y-3">
-              {statKeys.map((stat) => (
-                <div key={String(stat)} className="flex items-center gap-3">
-                  <span className="text-xl w-8 text-center">{statIcons[stat]}</span>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-foreground">{statLabels[stat]}</div>
-                    <div className="text-xs text-muted">{statDescriptions[stat]}</div>
-                  </div>
+            <div className="grid grid-cols-2 gap-3">
+              {statLabels.map(({ key, label, color }) => (
+                <div
+                  key={key}
+                  className="flex items-center justify-between bg-background border border-border rounded-lg px-3 py-2"
+                >
+                  <span className={`text-sm font-medium ${color}`}>{label}</span>
                   <div className="flex items-center gap-2">
                     <button
-                      type="button"
-                      onClick={() => decrementStat(stat)}
-                      disabled={stats[stat] <= 1 || isLoading}
-                      className="w-7 h-7 rounded border border-border bg-surface-2 text-foreground hover:bg-surface-1 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-sm font-bold"
+                      onClick={() => decrementStat(key)}
+                      disabled={statPoints[key] <= 1}
+                      className="w-6 h-6 rounded bg-surface-2 text-foreground hover:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-sm font-bold"
                     >
                       −
                     </button>
-                    <span className="w-8 text-center font-bold text-foreground text-lg">
-                      {stats[stat]}
+                    <span className="w-6 text-center font-display font-bold text-foreground">
+                      {statPoints[key]}
                     </span>
                     <button
-                      type="button"
-                      onClick={() => incrementStat(stat)}
-                      disabled={remainingPoints <= 0 || isLoading}
-                      className="w-7 h-7 rounded border border-border bg-surface-2 text-foreground hover:bg-surface-1 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-sm font-bold"
+                      onClick={() => incrementStat(key)}
+                      disabled={remainingPoints <= 0}
+                      className="w-6 h-6 rounded bg-surface-2 text-foreground hover:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-sm font-bold"
                     >
                       +
                     </button>
@@ -224,45 +253,83 @@ export default function CharacterCreation({ onCharacterCreated, onAlreadyExists 
                 </div>
               ))}
             </div>
-
-            {remainingPoints > 0 && (
-              <p className="text-xs text-amber-500 mt-3 text-center">
-                ⚠️ You have {remainingPoints} unspent point{remainingPoints !== 1 ? 's' : ''}. Allocate all points before continuing.
-              </p>
-            )}
           </div>
 
-          {/* Starter Equipment Notice */}
-          <div className="bg-surface-1 border border-border/50 rounded-lg p-3 flex items-start gap-2">
-            <span className="text-yellow-500 text-sm mt-0.5">⚔</span>
-            <p className="text-xs text-muted">
-              Your hero will start with a <span className="text-foreground font-medium">Worn Sword</span> and{' '}
-              <span className="text-foreground font-medium">Worn Chestplate</span> to survive the early dungeons.
-            </p>
+          {/* Starter Gear Notice */}
+          <div className="bg-background border border-border rounded-lg px-4 py-3 text-sm text-muted-foreground flex items-start gap-2">
+            <Plus className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+            <span>
+              Your character will start with a{' '}
+              <span className="text-foreground font-medium">Worn Sword</span> and{' '}
+              <span className="text-foreground font-medium">Worn Chestplate</span> equipped.
+            </span>
           </div>
 
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-destructive text-sm text-center">
-              {error}
-            </div>
-          )}
+          {/* Error */}
+          {error && <p className="text-destructive text-sm text-center">{error}</p>}
 
-          <button
-            type="submit"
-            disabled={isLoading || remainingPoints > 0 || !name.trim()}
-            className="w-full py-3 rounded-lg bg-primary text-primary-foreground font-bold uppercase tracking-widest hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-              <>
-                <span className="animate-spin inline-block w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full" />
-                Creating Hero...
-              </>
-            ) : (
-              'Begin Your Journey'
+          {/* Actions */}
+          <div className="flex gap-3">
+            {handleBack && (
+              <Button variant="outline" onClick={handleBack} className="flex-1">
+                Back
+              </Button>
             )}
-          </button>
-        </form>
+            <Button
+              onClick={handleCreate}
+              disabled={
+                createCharacterMutation.isPending || !name.trim() || remainingPoints !== 0
+              }
+              className="flex-1"
+            >
+              {createCharacterMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Character'
+              )}
+            </Button>
+          </div>
+        </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Character</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete{' '}
+              <span className="font-semibold text-foreground">{deleteTarget?.name}</span>? This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCharacterMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleteCharacterMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteCharacterMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

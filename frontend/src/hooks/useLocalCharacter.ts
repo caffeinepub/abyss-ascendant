@@ -1,350 +1,220 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Character } from '../backend';
+import { LocalCharacter, calculateMaxHp, calculateUnspentStatPoints, calculateAvailableAbilityPoints } from '../types/game';
 import { GeneratedItem } from '../engine/lootGenerator';
+import { useSetCharacterHp } from './useQueries';
 
-export type { GeneratedItem };
+export type { LocalCharacter };
 
-export interface LocalStats {
-  str: number;
-  dex: number;
-  int: number;
-  vit: number;
+interface CharacterWithId {
+  id: number;
+  character: Character;
 }
 
-export interface LocalCharacter {
-  // Identity
-  characterId: number;
-  name: string;
-  realm: 'Softcore' | 'Hardcore';
-  classTier: number;
-  season: number;
-  status: 'Alive' | 'Dead';
+function buildLocalCharacter(id: number, backendChar: Character, currentHp?: number): LocalCharacter {
+  const str = Number(backendChar.baseStats.str);
+  const dex = Number(backendChar.baseStats.dex);
+  const int_ = Number(backendChar.baseStats.int);
+  const vit = Number(backendChar.baseStats.vit);
 
-  // Level / XP
-  level: number;
-  xp: number;
-  pendingStatPoints: number;
+  const maxHp = calculateMaxHp(vit);
+  // Use provided currentHp (live value), or backend-persisted value, never reset to maxHp
+  const resolvedCurrentHp = currentHp !== undefined
+    ? Math.min(currentHp, maxHp)
+    : Math.min(Number(backendChar.advancedStats.currentHP), maxHp);
 
-  // Stats (flat, matches old shape)
-  stats: LocalStats;
+  const level = Number(backendChar.level);
+  const xp = Number(backendChar.xp);
+  const season = Number(backendChar.season);
+  const totalStatPointsEarned = Number(backendChar.totalStatPointsEarned);
+  const totalStatPointsSpent = Number(backendChar.totalStatPointsSpent);
 
-  // HP
-  maxHP: number;
-  currentHP: number;
+  const pendingStatPoints = calculateUnspentStatPoints(totalStatPointsEarned, totalStatPointsSpent);
+  const abilityPoints = calculateAvailableAbilityPoints(level);
 
-  // Inventory
-  inventory: GeneratedItem[];
-  stash: GeneratedItem[];
-  equippedItems: GeneratedItem[];
-
-  // Abilities
-  ownedAbilityIds: string[];
-  equippedAbilityIds: string[]; // max 3
-  availableAbilityPoints: number;
-}
-
-function getStorageKey(characterId: number): string {
-  return `localCharacter_v3_${characterId}`;
-}
-
-interface LocalOnlyData {
-  pendingStatPoints: number;
-  inventory: GeneratedItem[];
-  stash: GeneratedItem[];
-  equippedItems: GeneratedItem[];
-  ownedAbilityIds: string[];
-  equippedAbilityIds: string[];
-  availableAbilityPoints: number;
-}
-
-function loadLocalData(characterId: number): LocalOnlyData | null {
-  try {
-    const key = getStorageKey(characterId);
-    const stored = localStorage.getItem(key);
-    if (!stored) return null;
-    return JSON.parse(stored) as LocalOnlyData;
-  } catch {
-    return null;
-  }
-}
-
-function saveLocalData(character: LocalCharacter): void {
-  try {
-    const key = getStorageKey(character.characterId);
-    const toSave: LocalOnlyData = {
-      pendingStatPoints: character.pendingStatPoints,
-      inventory: character.inventory,
-      stash: character.stash,
-      equippedItems: character.equippedItems,
-      ownedAbilityIds: character.ownedAbilityIds,
-      equippedAbilityIds: character.equippedAbilityIds,
-      availableAbilityPoints: character.availableAbilityPoints,
-    };
-    localStorage.setItem(key, JSON.stringify(toSave));
-  } catch {
-    // ignore
-  }
-}
-
-export function useLocalCharacter() {
-  const [character, setCharacterState] = useState<LocalCharacter | null>(null);
-
-  const initializeCharacter = useCallback(
-    (backendCharacter: Character, characterId: number): LocalCharacter => {
-      const localData = loadLocalData(characterId);
-
-      const realmKind = (backendCharacter.realm as unknown as { __kind__: string }).__kind__;
-      const statusKind = (backendCharacter.status as unknown as { __kind__: string }).__kind__;
-
-      const merged: LocalCharacter = {
-        characterId,
-        name: backendCharacter.name,
-        realm: realmKind === 'Hardcore' ? 'Hardcore' : 'Softcore',
-        classTier: Number(backendCharacter.classTier),
-        season: Number(backendCharacter.season),
-        status: statusKind === 'Dead' ? 'Dead' : 'Alive',
-        level: Number(backendCharacter.level),
-        xp: Number(backendCharacter.xp),
-        stats: {
-          str: Number(backendCharacter.str),
-          dex: Number(backendCharacter.dex),
-          int: Number(backendCharacter.int),
-          vit: Number(backendCharacter.vit),
-        },
-        maxHP: Number(backendCharacter.maxHP),
-        // Always seed from backend currentHP
-        currentHP: Number(backendCharacter.currentHP),
-        // Local-only data
-        pendingStatPoints: localData?.pendingStatPoints ?? 0,
-        inventory: localData?.inventory ?? [],
-        stash: localData?.stash ?? [],
-        equippedItems: localData?.equippedItems ?? [],
-        ownedAbilityIds: localData?.ownedAbilityIds ?? [],
-        equippedAbilityIds: localData?.equippedAbilityIds ?? [],
-        availableAbilityPoints: localData?.availableAbilityPoints ?? 1,
-      };
-
-      setCharacterState(merged);
-      return merged;
-    },
-    []
-  );
-
-  const updateCharacter = useCallback(
-    (updater: (prev: LocalCharacter) => LocalCharacter) => {
-      setCharacterState((prev) => {
-        if (!prev) return prev;
-        const updated = updater(prev);
-        saveLocalData(updated);
-        return updated;
-      });
-    },
-    []
-  );
-
-  const setCurrentHP = useCallback((hp: number) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      const updated = { ...prev, currentHP: Math.max(0, Math.min(hp, prev.maxHP)) };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
-
-  const clearCharacter = useCallback(() => {
-    setCharacterState(null);
-  }, []);
-
-  // Legacy helpers used by CharacterSheet / AbilitySelectModal
-  const applyStatPoints = useCallback(
-    (delta: Partial<LocalStats>) => {
-      setCharacterState((prev) => {
-        if (!prev) return prev;
-        const cost = Object.values(delta).reduce((s, v) => s + (v ?? 0), 0);
-        if (cost > prev.pendingStatPoints) return prev;
-        const updated: LocalCharacter = {
-          ...prev,
-          stats: {
-            str: prev.stats.str + (delta.str ?? 0),
-            dex: prev.stats.dex + (delta.dex ?? 0),
-            int: prev.stats.int + (delta.int ?? 0),
-            vit: prev.stats.vit + (delta.vit ?? 0),
-          },
-          pendingStatPoints: prev.pendingStatPoints - cost,
-        };
-        saveLocalData(updated);
-        return updated;
-      });
-    },
-    []
-  );
-
-  const purchaseAbility = useCallback((abilityId: string) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      if (prev.availableAbilityPoints <= 0) return prev;
-      if (prev.ownedAbilityIds.includes(abilityId)) return prev;
-      const updated: LocalCharacter = {
-        ...prev,
-        ownedAbilityIds: [...prev.ownedAbilityIds, abilityId],
-        availableAbilityPoints: prev.availableAbilityPoints - 1,
-      };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
-
-  const equipAbility = useCallback((abilityId: string, slotIndex: number) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      if (!prev.ownedAbilityIds.includes(abilityId)) return prev;
-      if (slotIndex < 0 || slotIndex > 2) return prev;
-      const newEquipped = [...prev.equippedAbilityIds];
-      const existingIdx = newEquipped.indexOf(abilityId);
-      if (existingIdx !== -1) newEquipped.splice(existingIdx, 1);
-      while (newEquipped.length <= slotIndex) newEquipped.push('');
-      newEquipped[slotIndex] = abilityId;
-      const cleaned = newEquipped.filter((id, i) => id !== '' || i < 3).slice(0, 3);
-      const updated: LocalCharacter = { ...prev, equippedAbilityIds: cleaned };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
-
-  const unequipAbility = useCallback((abilityId: string) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      const updated: LocalCharacter = {
-        ...prev,
-        equippedAbilityIds: prev.equippedAbilityIds.filter((id) => id !== abilityId),
-      };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
-
-  const addItemToInventory = useCallback((item: GeneratedItem) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      const updated: LocalCharacter = { ...prev, inventory: [...prev.inventory, item] };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
-
-  const equipItem = useCallback((item: GeneratedItem) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      const newInventory = prev.inventory.filter((i) => i.id !== item.id);
-      const displaced = prev.equippedItems.find((i) => i.itemType === item.itemType);
-      const newEquipped = prev.equippedItems.filter((i) => i.itemType !== item.itemType);
-      newEquipped.push(item);
-      if (displaced) newInventory.push(displaced);
-      const updated: LocalCharacter = { ...prev, inventory: newInventory, equippedItems: newEquipped };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
-
-  const unequipItem = useCallback((item: GeneratedItem) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      const updated: LocalCharacter = {
-        ...prev,
-        equippedItems: prev.equippedItems.filter((i) => i.id !== item.id),
-        inventory: [...prev.inventory, item],
-      };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
-
-  const moveToStash = useCallback((item: GeneratedItem) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      const updated: LocalCharacter = {
-        ...prev,
-        inventory: prev.inventory.filter((i) => i.id !== item.id),
-        stash: [...prev.stash, item],
-      };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
-
-  const moveFromStash = useCallback((item: GeneratedItem) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      const updated: LocalCharacter = {
-        ...prev,
-        stash: prev.stash.filter((i) => i.id !== item.id),
-        inventory: [...prev.inventory, item],
-      };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
-
-  const applyDeathPenalty = useCallback((isHardcore: boolean) => {
-    setCharacterState((prev) => {
-      if (!prev) return prev;
-      if (isHardcore) return prev;
-      const xpLoss = Math.floor(prev.xp * 0.1);
-      const newXp = Math.max(0, prev.xp - xpLoss);
-      const newLevel = Math.max(1, Math.floor(newXp / 100) + 1);
-      const totalPoints = 1 + Math.floor(newLevel / 10);
-      const spentPoints = prev.ownedAbilityIds.length;
-      const updated: LocalCharacter = {
-        ...prev,
-        xp: newXp,
-        level: newLevel,
-        availableAbilityPoints: Math.max(0, totalPoints - spentPoints),
-        status: 'Alive',
-        currentHP: prev.maxHP,
-      };
-      saveLocalData(updated);
-      return updated;
-    });
-  }, []);
+  // Base attack from str + dex
+  const baseAttack = Math.floor(str * 1.5 + dex * 0.5) + 5;
+  // Base defense from str + vit
+  const baseDefense = Math.floor(str * 0.5 + vit * 0.5) + 2;
+  // Crit chance from dex
+  const critChance = Number(backendChar.advancedStats.critChance) + Math.floor(dex * 0.5);
+  // Crit power from int
+  const critPower = Number(backendChar.advancedStats.critPower) + Math.floor(int_ * 1.0);
 
   return {
-    character,
-    initializeCharacter,
-    updateCharacter,
-    setCurrentHP,
-    clearCharacter,
-    // Legacy helpers
-    applyStatPoints,
-    purchaseAbility,
-    equipAbility,
-    unequipAbility,
-    addItemToInventory,
-    equipItem,
-    unequipItem,
-    moveToStash,
-    moveFromStash,
-    applyDeathPenalty,
+    id,
+    name: backendChar.name,
+    realm: backendChar.realm === 'Hardcore' ? 'Hardcore' : 'Softcore',
+    level,
+    xp,
+    season,
+    status: backendChar.status === 'Dead' ? 'Dead' : 'Alive',
+    baseStats: { str, dex, int: int_, vit },
+    stats: {
+      str,
+      dex,
+      int: int_,
+      vit,
+      maxHp,
+      currentHp: resolvedCurrentHp,
+      attack: baseAttack,
+      defense: baseDefense,
+      critChance,
+      critPower,
+    },
+    abilities: [],
+    equippedAbilities: [],
+    equippedItems: [],
+    inventory: [],
+    stash: [],
+    pendingStatPoints,
+    totalStatPointsEarned,
+    totalStatPointsSpent,
+    abilityPoints,
   };
 }
 
-// Helper to save starter equipment for a newly created character by characterId
-export function saveStarterEquipmentForCharacter(
-  characterId: number,
-  equippedItems: GeneratedItem[]
-): void {
-  try {
-    const key = `localCharacter_v3_${characterId}`;
-    const existing = localStorage.getItem(key);
-    let data: Record<string, unknown> = {};
-    if (existing) {
-      try { data = JSON.parse(existing); } catch { data = {}; }
+export function useLocalCharacter(characterWithId: CharacterWithId | null) {
+  const [localCharacter, setLocalCharacter] = useState<LocalCharacter | null>(null);
+  const setCharacterHp = useSetCharacterHp();
+
+  // When the backend character changes (new selection or data refresh),
+  // rebuild the local character — but preserve the live HP if it's the same character
+  useEffect(() => {
+    if (!characterWithId) {
+      setLocalCharacter(null);
+      return;
     }
-    // Only set starter equipment if no equipped items already exist
-    if (!data.equippedItems || (data.equippedItems as GeneratedItem[]).length === 0) {
-      data.equippedItems = equippedItems;
-    }
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch {
-    // ignore
-  }
+
+    setLocalCharacter(prev => {
+      // If same character, preserve the live HP (don't reset to backend value)
+      if (prev && prev.id === characterWithId.id) {
+        return buildLocalCharacter(characterWithId.id, characterWithId.character, prev.stats.currentHp);
+      }
+      // New character selected — use backend-persisted HP as source of truth
+      return buildLocalCharacter(characterWithId.id, characterWithId.character);
+    });
+  }, [characterWithId]);
+
+  const updateHp = useCallback((newHp: number) => {
+    setLocalCharacter(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        stats: { ...prev.stats, currentHp: newHp },
+      };
+    });
+  }, []);
+
+  const applyEquipment = useCallback((items: GeneratedItem[]) => {
+    setLocalCharacter(prev => {
+      if (!prev) return null;
+
+      let bonusAttack = 0;
+      let bonusDefense = 0;
+      let bonusHp = 0;
+      let bonusCritChance = 0;
+
+      for (const item of items) {
+        for (const affix of item.affixes) {
+          switch (affix.stat) {
+            case 'physicalDamage': bonusAttack += affix.value; break;
+            case 'defense': bonusDefense += affix.value; break;
+            case 'hp': bonusHp += affix.value; break;
+            case 'critChance': bonusCritChance += affix.value; break;
+          }
+        }
+        // Base weapon damage
+        if (item.itemType === 'Weapon' && item.baseDamage) {
+          bonusAttack += item.baseDamage;
+        }
+        // Base armor defense
+        if (item.itemType === 'Armor' && item.baseDefense) {
+          bonusDefense += item.baseDefense;
+        }
+      }
+
+      const newMaxHp = prev.stats.maxHp + bonusHp;
+      const newCurrentHp = Math.min(prev.stats.currentHp, newMaxHp);
+
+      return {
+        ...prev,
+        equippedItems: items,
+        stats: {
+          ...prev.stats,
+          maxHp: newMaxHp,
+          currentHp: newCurrentHp,
+          attack: prev.stats.attack + bonusAttack,
+          defense: prev.stats.defense + bonusDefense,
+          critChance: prev.stats.critChance + bonusCritChance,
+        },
+      };
+    });
+  }, []);
+
+  const applyAbilities = useCallback((abilityIds: string[]) => {
+    setLocalCharacter(prev => {
+      if (!prev) return null;
+      return { ...prev, equippedAbilities: abilityIds, abilities: abilityIds };
+    });
+  }, []);
+
+  const applyLevelUp = useCallback((newBaseStats: { str: number; dex: number; int: number; vit: number }, newTotalSpent: number) => {
+    setLocalCharacter(prev => {
+      if (!prev) return null;
+      const newMaxHp = calculateMaxHp(newBaseStats.vit);
+      const newCurrentHp = Math.min(prev.stats.currentHp, newMaxHp);
+      const baseAttack = Math.floor(newBaseStats.str * 1.5 + newBaseStats.dex * 0.5) + 5;
+      const baseDefense = Math.floor(newBaseStats.str * 0.5 + newBaseStats.vit * 0.5) + 2;
+
+      // Re-apply equipment bonuses
+      let bonusAttack = 0;
+      let bonusDefense = 0;
+      let bonusHp = 0;
+      for (const item of prev.equippedItems) {
+        for (const affix of item.affixes) {
+          if (affix.stat === 'physicalDamage') bonusAttack += affix.value;
+          if (affix.stat === 'defense') bonusDefense += affix.value;
+          if (affix.stat === 'hp') bonusHp += affix.value;
+        }
+        if (item.itemType === 'Weapon' && item.baseDamage) bonusAttack += item.baseDamage;
+        if (item.itemType === 'Armor' && item.baseDefense) bonusDefense += item.baseDefense;
+      }
+
+      return {
+        ...prev,
+        baseStats: newBaseStats,
+        stats: {
+          ...prev.stats,
+          str: newBaseStats.str,
+          dex: newBaseStats.dex,
+          int: newBaseStats.int,
+          vit: newBaseStats.vit,
+          maxHp: newMaxHp + bonusHp,
+          currentHp: newCurrentHp,
+          attack: baseAttack + bonusAttack,
+          defense: baseDefense + bonusDefense,
+        },
+        totalStatPointsSpent: newTotalSpent,
+        pendingStatPoints: calculateUnspentStatPoints(prev.totalStatPointsEarned, newTotalSpent),
+      };
+    });
+  }, []);
+
+  const syncHpToBackend = useCallback((characterId: number, hp: number) => {
+    setCharacterHp.mutate({ characterId, hp });
+  }, [setCharacterHp]);
+
+  return {
+    localCharacter,
+    updateHp,
+    applyEquipment,
+    applyAbilities,
+    applyLevelUp,
+    syncHpToBackend,
+  };
+}
+
+export function saveStarterEquipmentForCharacter(_characterId: number): void {
+  // Starter equipment is managed locally; no backend persistence needed for items yet
 }

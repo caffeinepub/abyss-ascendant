@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 19,
+  "projectStateVersion": 39,
   "summary": "Full-stack browser-based real-time hack-and-slash RPG inspired by Ladder Slasher's gameplay loop. Built with React + TypeScript frontend and Motoko backend on ICP. Features Internet Identity auth, shared persistent on-chain world, ICP-based marketplace, live leaderboard, seasonal resets, hardcore/softcore realms, tick-based combat, class progression with Ascension Trials, and full itemization system.",
   "architectural_notes": [
     "Frontend: React + TypeScript with Canvas rendering for dungeon/combat screens",
@@ -16,9 +16,17 @@
   ],
   "known_issues": [
     "Real-time WebSocket co-op (live players in same dungeon) is not supported on ICP platform; multiplayer is shared-world async only",
-    "Equipment stats (weapon base damage, armor base defense, affixes) not applied to character effective stats in combat or character sheet"
+    "Equipment stats (weapon base damage, armor base defense, affixes) not applied to character effective stats in combat or character sheet",
+    "Starter gear not appearing in equipment slots after character creation",
+    "Stat allocation during character creation not persisted — all stats revert to 1 after creation",
+    "Delete character button missing from character creation flow (only spec'd for character select screen)",
+    "Ability points mismatch: character summary shows 1 available point at level 1 but abilities screen shows 0",
+    "Character select screen shows 20 HP instead of correct max HP; regen initializes from 20 instead of persisted currentHp",
+    "App stuck on loading screen after login — character fetch (getCharacters) hangs indefinitely with no fallback; loading state never clears on error",
+    "XP not persisting after dungeon runs — characters return to same level/XP after every fight; combat result submission does not write updated XP/level to stable storage",
+    "HP resets to 20 after dungeon runs instead of persisting post-combat HP; regen reinitializes from 20 rather than the actual remaining HP"
   ],
-  "isFixRequest": false,
+  "isFixRequest": true,
   "existing_features": [
     {
       "id": "feature-implement-internet-identity-authentication-users-must-log-in-before-creating-or-accessing-characters-all-on-chain-state-characters-inventory-marketplace-listings-must-be-scoped-to-the-authenticated-principal",
@@ -331,6 +339,198 @@
         "REQ-48"
       ],
       "version": 1
+    },
+    {
+      "id": "feature-fix-stat-allocation-persistence-during-character-creation-when-the-player-distributes-their-8-starting-stat-points-and-confirms-creation-in-charactercreation-tsx-the-allocated-strength-dexterity-intelligence-and-vitality-values-must-be-passed-directly-to-the-createcharacter-backend-call-and-written-into-the-character-s-basestats-record-in-stable-storage-no-post-creation-step-may-overwrite-these-values-with-defaults-on-the-character-sheet-all-four-stats-must-reflect-the-player-chosen-values-immediately-after-creation",
+      "title": "Fix stat allocation persistence during character creation: when the player distributes their 8 starting stat points and confirms creation in CharacterCreation.tsx, the allocated Strength, Dexterity, Intelligence, and Vitality values must be passed directly to the createCharacter backend call and written into the character's baseStats record in stable storage. No post-creation step may overwrite these values with defaults. On the character sheet, all four stats must reflect the player-chosen values immediately after creation.",
+      "reqIds": [
+        "REQ-49"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-fix-starter-equipment-not-being-equipped-after-character-creation-trace-the-full-creation-flow-in-charactercreation-tsx-and-uselocalcharacter-ts-to-identify-why-the-generated-starter-weapon-and-armor-items-are-not-appearing-in-the-character-s-equipment-slots-ensure-that-after-createcharacter-resolves-the-starter-weapon-is-placed-in-the-weapon-equipment-slot-and-the-starter-armor-is-placed-in-the-armor-equipment-slot-in-both-local-state-and-persisted-storage-before-routing-to-the-character-sheet",
+      "title": "Fix starter equipment not being equipped after character creation: trace the full creation flow in CharacterCreation.tsx and useLocalCharacter.ts to identify why the generated starter Weapon and Armor items are not appearing in the character's equipment slots. Ensure that after createCharacter resolves, the starter weapon is placed in the weapon equipment slot and the starter armor is placed in the armor equipment slot in both local state and persisted storage before routing to the character sheet.",
+      "reqIds": [
+        "REQ-50"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-delete-character-button-to-the-character-creation-flow-on-charactercreation-tsx-when-the-player-navigates-to-create-a-new-character-display-a-list-of-their-existing-characters-if-any-with-a-delete-button-next-to-each-clicking-delete-must-show-a-confirmation-prompt-before-permanently-removing-the-character-via-the-deletecharacter-backend-call-this-is-in-addition-to-the-existing-delete-button-on-characterselectscreen-tsx-both-entry-points-must-support-deletion",
+      "title": "Add a Delete Character button to the character creation flow: on CharacterCreation.tsx, when the player navigates to create a new character, display a list of their existing characters (if any) with a Delete button next to each. Clicking Delete must show a confirmation prompt before permanently removing the character via the deleteCharacter backend call. This is in addition to the existing Delete button on CharacterSelectScreen.tsx — both entry points must support deletion.",
+      "reqIds": [
+        "REQ-51"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-fix-the-ability-points-mismatch-ensure-the-available-ability-point-count-displayed-on-the-character-summary-charactersheet-tsx-and-the-count-shown-inside-the-abilityselectmodal-tsx-both-derive-from-the-same-single-source-of-truth-using-the-formula-floor-level-1-10-1-so-that-a-level-1-character-always-shows-exactly-1-available-ability-point-in-both-locations-the-abilities-screen-must-never-show-0-when-the-character-summary-shows-1",
+      "title": "Fix the ability points mismatch: ensure the available ability point count displayed on the character summary (CharacterSheet.tsx) and the count shown inside the AbilitySelectModal.tsx both derive from the same single source of truth using the formula: floor((level - 1) / 10) + 1, so that a level 1 character always shows exactly 1 available ability point in both locations. The abilities screen must never show 0 when the character summary shows 1.",
+      "reqIds": [
+        "REQ-53"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-fix-the-character-select-screen-hp-display-each-character-card-in-characterselectscreen-tsx-must-display-the-character-s-correct-maxhp-derived-from-base-stats-vitality-bonus-using-the-same-formula-as-combatengine-ts-and-charactersheet-tsx-rather-than-the-hardcoded-or-default-value-of-20-the-currenthp-displayed-on-the-card-must-also-reflect-the-persisted-currenthp-value-read-from-the-backend-character-record",
+      "title": "Fix the character select screen HP display: each character card in CharacterSelectScreen.tsx must display the character's correct maxHp (derived from base stats + Vitality bonus, using the same formula as combatEngine.ts and CharacterSheet.tsx) rather than the hardcoded or default value of 20. The currentHp displayed on the card must also reflect the persisted currentHp value read from the backend character record.",
+      "reqIds": [
+        "REQ-54"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-usequeries-ts-ensure-the-getcharacters-query-or-equivalent-character-list-fetch-has-a-defined-timeout-and-does-not-hang-indefinitely-if-the-backend-call-fails-rejects-or-does-not-resolve-within-a-reasonable-window-the-query-must-settle-into-an-error-state-rather-than-remaining-in-a-perpetual-loading-state-configure-react-query-s-retry-count-to-at-most-1-retry-for-this-query-to-prevent-long-hang-times",
+      "title": "In useQueries.ts, ensure the getCharacters query (or equivalent character list fetch) has a defined timeout and does not hang indefinitely. If the backend call fails, rejects, or does not resolve within a reasonable window, the query must settle into an error state rather than remaining in a perpetual loading state. Configure React Query's retry count to at most 1 retry for this query to prevent long hang times.",
+      "reqIds": [
+        "REQ-56"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-app-tsx-audit-the-top-level-loading-state-logic-that-gates-rendering-after-login-ensure-the-loading-flag-is-explicitly-set-to-false-on-both-the-success-and-error-paths-of-the-character-fetch-if-the-character-fetch-errors-or-returns-an-empty-result-the-app-must-render-the-character-select-screen-empty-state-rather-than-staying-on-a-loading-screen-no-code-path-may-leave-the-app-in-a-permanent-loading-state",
+      "title": "In App.tsx, audit the top-level loading state logic that gates rendering after login. Ensure the loading flag is explicitly set to false on both the success and error paths of the character fetch. If the character fetch errors or returns an empty result, the app must render the character select screen (empty state) rather than staying on a loading screen. No code path may leave the app in a permanent loading state.",
+      "reqIds": [
+        "REQ-57"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-app-tsx-or-characterselectscreen-tsx-add-an-error-boundary-fallback-for-the-character-list-query-if-iserror-is-true-on-the-characters-query-display-a-user-facing-error-message-e-g-could-not-load-characters-please-refresh-the-page-with-a-retry-button-that-re-triggers-the-query-rather-than-leaving-the-user-on-a-blank-loading-screen",
+      "title": "In App.tsx or CharacterSelectScreen.tsx, add an error boundary / fallback for the character list query. If `isError` is true on the characters query, display a user-facing error message (e.g., 'Could not load characters. Please refresh the page.') with a retry button that re-triggers the query, rather than leaving the user on a blank loading screen.",
+      "reqIds": [
+        "REQ-58"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-the-frontend-combat-result-submission-flow-app-tsx-dungeonrunscreen-tsx-or-usequeries-ts-whichever-calls-the-backend-after-a-dungeon-run-ensure-the-earned-xp-and-resulting-level-from-the-combatresult-are-passed-to-the-backend-submitdungeonresult-or-equivalent-call-after-every-completed-run-including-both-victories-and-softcore-deaths-after-the-backend-call-resolves-invalidate-or-refetch-the-active-character-query-so-charactersheet-tsx-and-xpbar-tsx-immediately-reflect-the-persisted-xp-and-level",
+      "title": "In the frontend combat result submission flow (App.tsx, DungeonRunScreen.tsx, or useQueries.ts — whichever calls the backend after a dungeon run), ensure the earned XP and resulting level from the CombatResult are passed to the backend submitDungeonResult (or equivalent) call after every completed run, including both victories and Softcore deaths. After the backend call resolves, invalidate or refetch the active character query so CharacterSheet.tsx and XPBar.tsx immediately reflect the persisted XP and level.",
+      "reqIds": [
+        "REQ-60"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-combatengine-ts-after-the-combat-simulation-completes-win-loss-or-softcore-death-include-the-player-s-remaining-hp-in-the-returned-combatresult-object-this-value-must-be-the-actual-hp-remaining-at-the-end-of-combat-0-on-death-for-softcore-on-a-softcore-death-the-returned-hp-should-be-a-small-positive-value-e-g-1-rather-than-0-so-the-player-can-regen-back-to-full",
+      "title": "In combatEngine.ts, after the combat simulation completes (win, loss, or Softcore death), include the player's remaining HP in the returned CombatResult object. This value must be the actual HP remaining at the end of combat — 0 on death for Softcore. On a Softcore death the returned HP should be a small positive value (e.g. 1) rather than 0, so the player can regen back to full.",
+      "reqIds": [
+        "REQ-61"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-dungeonrunscreen-tsx-after-the-dungeon-run-completes-and-the-backend-submission-resolves-call-the-setcharacterhp-backend-mutation-with-the-remaininghp-value-from-the-combatresult-then-update-the-local-hp-state-in-app-tsx-or-uselocalcharacter-ts-to-that-same-remaininghp-value-so-the-health-bar-and-regen-interval-immediately-start-from-the-correct-post-combat-hp-rather-than-defaulting-back-to-20",
+      "title": "In DungeonRunScreen.tsx, after the dungeon run completes and the backend submission resolves, call the setCharacterHp backend mutation with the remainingHp value from the CombatResult. Then update the local HP state in App.tsx (or useLocalCharacter.ts) to that same remainingHp value so the health bar and regen interval immediately start from the correct post-combat HP rather than defaulting back to 20.",
+      "reqIds": [
+        "REQ-62"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-usehealthregen-ts-or-wherever-the-regen-interval-is-initialized-ensure-the-regen-interval-reads-its-starting-hp-from-the-backend-persisted-currenthp-value-each-time-a-character-is-selected-or-the-app-loads-it-must-not-hardcode-or-default-to-20-if-currenthp-equals-maxhp-the-regen-interval-must-not-fire",
+      "title": "In useHealthRegen.ts (or wherever the regen interval is initialized), ensure the regen interval reads its starting HP from the backend-persisted currentHp value each time a character is selected or the app loads. It must not hardcode or default to 20. If currentHp equals maxHp, the regen interval must not fire.",
+      "reqIds": [
+        "REQ-63"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-fix-stat-point-grants-on-level-up-in-types-game-ts-or-wherever-unspentstatpoints-is-calculated-ensure-the-formula-correctly-accounts-for-all-levels-gained-the-unspentstatpoints-for-a-character-should-be-currentlevel-1-minus-the-total-number-of-stat-points-already-spent-on-charactersheet-tsx-when-levelupmodal-is-triggered-the-number-of-allocatable-points-must-equal-the-newly-earned-stat-points-1-per-level-gained-after-the-player-allocates-and-confirms-in-levelupmodal-tsx-persist-the-updated-basestats-to-the-backend-via-the-appropriate-mutation-so-the-new-stat-values-survive-a-page-reload",
+      "title": "Fix stat point grants on level-up. In types/game.ts or wherever unspentStatPoints is calculated, ensure the formula correctly accounts for all levels gained. The unspentStatPoints for a character should be: (currentLevel - 1) minus the total number of stat points already spent. On CharacterSheet.tsx, when LevelUpModal is triggered, the number of allocatable points must equal the newly earned stat points (1 per level gained). After the player allocates and confirms in LevelUpModal.tsx, persist the updated baseStats to the backend via the appropriate mutation so the new stat values survive a page reload.",
+      "reqIds": [
+        "REQ-64"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-dungeonrunscreen-tsx-and-combatengine-ts-fix-all-combat-log-message-grammar-replace-every-occurrence-of-you-attacks-with-you-attack-and-every-occurrence-of-you-uses-with-you-use-audit-all-combat-log-string-templates-for-any-other-second-person-verb-conjugation-errors-and-fix-them-to-use-the-base-verb-form",
+      "title": "In DungeonRunScreen.tsx and combatEngine.ts, fix all combat log message grammar: replace every occurrence of 'you attacks' with 'you attack' and every occurrence of 'you uses' with 'you use'. Audit all combat log string templates for any other second-person verb conjugation errors and fix them to use the base verb form.",
+      "reqIds": [
+        "REQ-66"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-dungeonrunscreen-tsx-remove-the-artificial-2-second-delay-that-occurs-before-combat-begins-combat-simulation-must-start-rendering-immediately-with-no-loading-pause-or-loading-spinner-before-the-first-combat-tick-is-displayed",
+      "title": "In DungeonRunScreen.tsx, remove the artificial ~2 second delay that occurs before combat begins. Combat simulation must start rendering immediately with no loading pause or loading spinner before the first combat tick is displayed.",
+      "reqIds": [
+        "REQ-67"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-dungeonrunscreen-tsx-remove-the-post-combat-saving-pause-and-any-ui-element-that-informs-the-player-that-results-are-being-saved-e-g-saving-submitting-results-messages-or-spinners-backend-persistence-must-happen-silently-and-immediately-after-combat-ends-without-blocking-the-player-from-seeing-results-or-navigating-away",
+      "title": "In DungeonRunScreen.tsx, remove the post-combat 'saving' pause and any UI element that informs the player that results are being saved (e.g. 'Saving...', 'Submitting results...' messages or spinners). Backend persistence must happen silently and immediately after combat ends without blocking the player from seeing results or navigating away.",
+      "reqIds": [
+        "REQ-68"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-monsters-ts-set-the-base-hp-of-all-level-1-monster-templates-to-approximately-30-hp-review-and-fix-the-hp-scaling-formula-in-monsters-ts-and-combatengine-ts-so-that-monster-hp-scales-sensibly-from-30-at-level-1-upward-avoiding-the-current-situation-where-level-1-monsters-have-hundreds-of-hp-scaling-should-produce-a-smooth-meaningful-progression-curve-e-g-roughly-doubling-or-tripling-hp-by-level-10-not-jumping-to-300-at-level-1",
+      "title": "In monsters.ts, set the base HP of all level 1 monster templates to approximately 30 HP. Review and fix the HP scaling formula in monsters.ts and combatEngine.ts so that monster HP scales sensibly from ~30 at level 1 upward, avoiding the current situation where level 1 monsters have hundreds of HP. Scaling should produce a smooth, meaningful progression curve (e.g. roughly doubling or tripling HP by level 10, not jumping to 300+ at level 1).",
+      "reqIds": [
+        "REQ-69"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-fix-hp-reset-when-returning-to-the-character-select-screen-when-the-player-backs-out-to-characterselectscreen-tsx-and-then-re-selects-a-character-the-local-hp-state-and-regen-interval-must-initialize-from-the-backend-persisted-currenthp-value-for-that-character-not-from-maxhp-or-any-hardcoded-default-the-persisted-currenthp-is-the-single-source-of-truth-no-transition-navigation-event-or-character-re-selection-may-overwrite-the-current-hp-with-maxhp-unless-the-character-s-backend-record-already-stores-maxhp-as-the-currenthp-value",
+      "title": "Fix HP reset when returning to the character select screen: when the player backs out to CharacterSelectScreen.tsx and then re-selects a character, the local HP state and regen interval must initialize from the backend-persisted currentHp value for that character — not from maxHp or any hardcoded default. The persisted currentHp is the single source of truth. No transition, navigation event, or character re-selection may overwrite the current HP with maxHp unless the character's backend record already stores maxHp as the currentHp value.",
+      "reqIds": [
+        "REQ-70"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-rework-the-enemy-tick-rate-formula-in-combatengine-ts-and-monsters-ts-set-the-player-s-base-ticks-between-attacks-to-12-unchanged-set-level-1-enemy-ticks-between-attacks-to-21-scale-enemy-ticks-down-by-1-for-every-5-levels-gained-level-1-21-level-6-20-level-11-19-level-16-18-continuing-down-with-a-minimum-floor-of-2-ticks-replace-the-previous-linear-interpolation-formula-entirely-with-this-new-step-based-formula-update-charactersheet-tsx-and-dungeonrunscreen-tsx-to-display-the-corrected-values",
+      "title": "Rework the enemy tick rate formula in combatEngine.ts and monsters.ts: set the player's base ticks-between-attacks to 12 (unchanged). Set level 1 enemy ticks-between-attacks to 21. Scale enemy ticks down by 1 for every 5 levels gained (level 1 = 21, level 6 = 20, level 11 = 19, level 16 = 18, … continuing down), with a minimum floor of 2 ticks. Replace the previous linear interpolation formula entirely with this new step-based formula. Update CharacterSheet.tsx and DungeonRunScreen.tsx to display the corrected values.",
+      "reqIds": [
+        "REQ-71"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-scale-xp-rewards-in-combatengine-ts-based-on-both-the-monster-s-level-and-the-monster-s-generated-stats-compute-a-stat-power-multiplier-from-the-monster-s-actual-hp-attack-and-defense-values-relative-to-the-baseline-for-that-level-monsters-whose-generated-stats-significantly-exceed-the-baseline-e-g-elder-gods-or-dragons-with-high-defense-and-hp-must-yield-proportionally-more-xp-than-a-weak-low-stat-monster-at-the-same-level-the-base-level-based-xp-value-is-multiplied-by-this-stat-power-factor-before-being-returned-in-the-combatresult-the-multiplier-must-never-reduce-xp-below-the-level-based-base-floor-at-1-0",
+      "title": "Scale XP rewards in combatEngine.ts based on both the monster's level AND the monster's generated stats. Compute a stat-power multiplier from the monster's actual HP, attack, and defense values relative to the baseline for that level. Monsters whose generated stats significantly exceed the baseline (e.g. elder gods or dragons with high defense and HP) must yield proportionally more XP than a weak low-stat monster at the same level. The base level-based XP value is multiplied by this stat-power factor before being returned in the CombatResult. The multiplier must never reduce XP below the level-based base (floor at 1.0×).",
+      "reqIds": [
+        "REQ-72"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-characterselectscreen-tsx-audit-the-enter-the-realm-or-equivalent-character-select-play-button-s-onclick-handler-identify-why-it-produces-zero-feedback-and-does-not-navigate-when-clicked-ensure-the-handler-correctly-invokes-the-character-selection-callback-e-g-onselectcharacter-or-equivalent-prop-passed-from-app-tsx-passing-the-selected-character-s-id-the-button-must-not-be-silently-disabled-have-a-missing-or-undefined-handler-or-have-its-event-swallowed-by-an-outer-element",
+      "title": "In CharacterSelectScreen.tsx, audit the 'Enter The Realm' (or equivalent character select / play) button's onClick handler. Identify why it produces zero feedback and does not navigate when clicked. Ensure the handler correctly invokes the character selection callback (e.g. onSelectCharacter or equivalent prop passed from App.tsx), passing the selected character's ID. The button must not be silently disabled, have a missing or undefined handler, or have its event swallowed by an outer element.",
+      "reqIds": [
+        "REQ-73"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-app-tsx-verify-that-the-onselectcharacter-callback-or-equivalent-passed-down-to-characterselectscreen-is-correctly-defined-and-sets-the-active-character-id-in-app-level-state-then-transitions-the-routing-state-to-the-character-sheet-dungeon-select-screen-ensure-no-intermediate-loading-flag-or-guard-condition-silently-blocks-the-transition-after-the-callback-fires",
+      "title": "In App.tsx, verify that the onSelectCharacter callback (or equivalent) passed down to CharacterSelectScreen is correctly defined and sets the active character ID in App-level state, then transitions the routing state to the character sheet / dungeon select screen. Ensure no intermediate loading flag or guard condition silently blocks the transition after the callback fires.",
+      "reqIds": [
+        "REQ-74"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-characterselectscreen-tsx-audit-the-enter-the-realm-button-s-onclick-handler-end-to-end-identify-and-fix-every-reason-the-button-produces-zero-feedback-and-does-not-navigate-when-clicked-specifically-1-confirm-the-button-is-not-conditionally-disabled-or-rendered-without-an-onclick-2-confirm-the-handler-calls-the-onselectcharacter-or-equivalent-prop-with-the-selected-character-s-id-3-confirm-no-outer-element-is-swallowing-the-click-event-e-g-a-pointer-events-none-overlay-or-a-stoppropagation-call-4-confirm-the-selected-character-state-is-non-null-at-the-time-the-button-is-clicked-so-the-id-passed-is-valid-5-remove-any-guard-or-early-return-that-silently-prevents-the-callback-from-firing",
+      "title": "In CharacterSelectScreen.tsx, audit the 'Enter The Realm' button's onClick handler end-to-end. Identify and fix every reason the button produces zero feedback and does not navigate when clicked. Specifically: (1) confirm the button is not conditionally disabled or rendered without an onClick; (2) confirm the handler calls the onSelectCharacter (or equivalent) prop with the selected character's ID; (3) confirm no outer element is swallowing the click event (e.g. a pointer-events-none overlay or a stopPropagation call); (4) confirm the selected character state is non-null at the time the button is clicked so the ID passed is valid; (5) remove any guard or early-return that silently prevents the callback from firing.",
+      "reqIds": [
+        "REQ-75"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-app-tsx-audit-the-onselectcharacter-callback-or-equivalent-that-is-passed-as-a-prop-to-characterselectscreen-verify-1-the-callback-is-defined-as-a-stable-function-usecallback-or-equivalent-and-is-not-undefined-at-render-time-2-it-correctly-writes-the-selected-character-s-id-into-app-level-state-e-g-activecharacterid-3-after-setting-the-id-it-immediately-updates-the-routing-state-to-transition-to-the-character-sheet-dungeon-select-screen-4-no-intermediate-loading-flag-isloading-guard-or-conditional-render-silently-blocks-the-screen-transition-after-the-callback-fires-5-if-any-such-guard-exists-ensure-it-evaluates-to-false-i-e-not-blocking-by-the-time-the-callback-completes",
+      "title": "In App.tsx, audit the onSelectCharacter callback (or equivalent) that is passed as a prop to CharacterSelectScreen. Verify: (1) the callback is defined as a stable function (useCallback or equivalent) and is not undefined at render time; (2) it correctly writes the selected character's ID into App-level state (e.g. activeCharacterId); (3) after setting the ID it immediately updates the routing state to transition to the character sheet / dungeon select screen; (4) no intermediate loading flag, isLoading guard, or conditional render silently blocks the screen transition after the callback fires; (5) if any such guard exists, ensure it evaluates to false (i.e. not blocking) by the time the callback completes.",
+      "reqIds": [
+        "REQ-76"
+      ],
+      "version": 1
     }
   ],
   "new_feature_requests": [
@@ -551,6 +751,104 @@
     {
       "id": "AR-46",
       "summary": "Remove drop % scroller from dungeon select screen; replace with static display of XP/drop rate info (flat 6% base, reduced by level gap)",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-47",
+      "summary": "Fix the persistent live health bar in Navigation.tsx (or wherever it is rendered) so that the max HP value it displays is derived using the same formula used by the combat engine and character sheet — base HP plus Vitality bonus contribution — rather than the hardcoded or default 20 HP it currently shows. The health bar's currentHp and maxHp props must both be computed from the character's effective stats (including Vitality) so all three displays (health bar, character sheet, combat engine) are in sync.",
+      "reqIds": [
+        "REQ-52"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-48",
+      "summary": "Fix ability points mismatch: character summary shows 1 available ability point at level 1 but abilities screen shows 0 — both must reflect the correct value (1 at level 1)",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-49",
+      "summary": "Fix character select screen showing wrong HP (20 instead of correct max HP derived from Vitality) and regen initializing from 20 instead of persisted currentHp",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-52",
+      "summary": "Fix the health regen initialization on character select: when the player selects a character and the app transitions to the game screens, initialize the local HP state and regen interval from the backend-persisted currentHp value for that character rather than from a hardcoded default of 20 or from maxHp. If currentHp is already at maxHp, the regen interval must not fire. If currentHp is below maxHp, regen must begin from the persisted value (e.g. if persisted currentHp is 45 and maxHp is 60, regen starts at 45 and ticks up — not from 20).",
+      "reqIds": [
+        "REQ-55"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-53",
+      "summary": "Fix XP not persisting after dungeon runs: after a run completes, earned XP and any level-ups must be saved to the backend character record in main.mo so progress carries over between sessions",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-54",
+      "summary": "In backend/main.mo, update the dungeon result submission handler (e.g. submitDungeonResult or equivalent) to write the updated XP and level values into the character's stable storage record after a completed run. The character's xp and level fields must reflect the combat result's earned XP and any level-ups triggered before the function returns. If no such submission function exists, add one that accepts the combat result (characterId, xpEarned, newLevel) from the authenticated principal and atomically updates the character record.",
+      "reqIds": [
+        "REQ-59"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-55",
+      "summary": "Fix HP not carrying over after battles: post-combat HP must persist to backend and regen must resume from that value instead of resetting to 20",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-56",
+      "summary": "Fix stat point not granted on level-up: level-up logic must correctly calculate and award unspent stat points, making them available on the character sheet",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-61",
+      "summary": "In backend/main.mo, ensure the submitDungeonResult (or equivalent) handler updates the character's statPoints field to reflect newly earned stat points from the run's level-up(s). Each level gained awards 1 stat point. The backend record must store both the total stat points earned and the total stat points spent, so unspent = earned - spent can always be computed correctly on the frontend.",
+      "reqIds": [
+        "REQ-65"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-62",
+      "summary": "Fix combat log grammar: 'you attacks' → 'you attack' and 'you uses' → 'you use'",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-63",
+      "summary": "Remove pre-combat loading delay (instant start) and post-combat save delay + saving notification (silent immediate persistence)",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-64",
+      "summary": "Rebalance monster HP: set level 1 base HP to ~30, with sensible scaling upward from there",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-65",
+      "summary": "Fix HP reset when returning to character select screen: persisted currentHp must be preserved when backing out to character select and re-selecting — not reset to max HP",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-66",
+      "summary": "Fix player attack tick rate: player base = 12 ticks. Level 1 enemies = 21 ticks, scaling down by 1 tick every 5 levels (level 6=20, level 11=19, etc.), floor of 2 ticks. Replaces previous enemy tick formula.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-67",
+      "summary": "Scale XP rewards based on both monster level AND monster generated stats (HP, defense, attack). Higher-stat monsters (e.g. elder gods, dragons with high defense) yield more XP than weak low-stat monsters at the same level.",
       "reqIds": [],
       "status": "pending"
     }

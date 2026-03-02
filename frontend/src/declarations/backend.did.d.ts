@@ -10,27 +10,51 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
-export interface Character {
-  'xp' : bigint,
+export interface AdvancedStats {
+  'maxHP' : bigint,
+  'currentHP' : bigint,
+  'critChance' : bigint,
+  'critPower' : bigint,
+}
+export interface BaseStats {
   'dex' : bigint,
   'int' : bigint,
   'str' : bigint,
   'vit' : bigint,
-  'maxHP' : bigint,
+}
+export interface Character {
+  'xp' : bigint,
   'status' : CharacterStatus,
-  'currentHP' : bigint,
+  'totalStatPointsEarned' : bigint,
   'name' : string,
   'season' : bigint,
   'level' : bigint,
+  'baseStats' : BaseStats,
+  'advancedStats' : AdvancedStats,
   'classTier' : bigint,
   'realm' : Realm,
+  'totalStatPointsSpent' : bigint,
 }
 export type CharacterCreationError = { 'noPermission' : null } |
   { 'alreadyExists' : null } |
   { 'limitReached' : null };
+export interface CharacterCreationParams {
+  'dex' : bigint,
+  'int' : bigint,
+  'str' : bigint,
+  'vit' : bigint,
+  'name' : string,
+  'realm' : Realm,
+}
 export type CharacterId = number;
 export type CharacterStatus = { 'Dead' : null } |
   { 'Alive' : null };
+export interface DungeonResult {
+  'unspentStatPoints' : bigint,
+  'newLevel' : bigint,
+  'xpEarned' : bigint,
+  'characterId' : CharacterId,
+}
 export type ExternalBlob = Uint8Array;
 export interface Item {
   'id' : string,
@@ -100,7 +124,7 @@ export interface _SERVICE {
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'buyItem' : ActorMethod<[string], undefined>,
   'createCharacter' : ActorMethod<
-    [string, Realm],
+    [CharacterCreationParams],
     { 'ok' : CharacterId } |
       { 'err' : CharacterCreationError }
   >,
@@ -120,6 +144,8 @@ export interface _SERVICE {
     { 'ok' : null } |
       { 'err' : SetHpError }
   >,
+  'spendStatPoints' : ActorMethod<[CharacterId, bigint], undefined>,
+  'submitDungeonResult' : ActorMethod<[DungeonResult], undefined>,
   'uploadItemImage' : ActorMethod<[string, ExternalBlob], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;

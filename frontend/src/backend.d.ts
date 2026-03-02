@@ -15,19 +15,31 @@ export class ExternalBlob {
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
 export type CharacterId = number;
+export interface AdvancedStats {
+    maxHP: bigint;
+    currentHP: bigint;
+    critChance: bigint;
+    critPower: bigint;
+}
 export interface Character {
     xp: bigint;
+    status: CharacterStatus;
+    totalStatPointsEarned: bigint;
+    name: string;
+    season: bigint;
+    level: bigint;
+    baseStats: BaseStats;
+    advancedStats: AdvancedStats;
+    classTier: bigint;
+    realm: Realm;
+    totalStatPointsSpent: bigint;
+}
+export interface CharacterCreationParams {
     dex: bigint;
     int: bigint;
     str: bigint;
     vit: bigint;
-    maxHP: bigint;
-    status: CharacterStatus;
-    currentHP: bigint;
     name: string;
-    season: bigint;
-    level: bigint;
-    classTier: bigint;
     realm: Realm;
 }
 export interface MarketplaceListing {
@@ -49,6 +61,18 @@ export interface Item {
     };
     itemType: ItemType;
     rarity: Rarity;
+}
+export interface DungeonResult {
+    unspentStatPoints: bigint;
+    newLevel: bigint;
+    xpEarned: bigint;
+    characterId: CharacterId;
+}
+export interface BaseStats {
+    dex: bigint;
+    int: bigint;
+    str: bigint;
+    vit: bigint;
 }
 export interface UserProfile {
     username: string;
@@ -91,7 +115,7 @@ export enum UserRole {
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     buyItem(itemId: string): Promise<void>;
-    createCharacter(name: string, realm: Realm): Promise<{
+    createCharacter(params: CharacterCreationParams): Promise<{
         __kind__: "ok";
         ok: CharacterId;
     } | {
@@ -116,5 +140,7 @@ export interface backendInterface {
         __kind__: "err";
         err: SetHpError;
     }>;
+    spendStatPoints(characterId: CharacterId, pointsSpent: bigint): Promise<void>;
+    submitDungeonResult(result: DungeonResult): Promise<void>;
     uploadItemImage(itemId: string, externalBlob: ExternalBlob): Promise<void>;
 }

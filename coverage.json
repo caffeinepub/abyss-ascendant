@@ -1,7 +1,7 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T04:04:27.967Z",
+  "generatedAt": "2026-03-02T14:05:39.635Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
@@ -11,44 +11,36 @@
     "implemented": 2,
     "items": [
       {
-        "id": "REQ-47",
-        "summary": "When a new character is created, automatically grant them a starter equipment set consisting of at minimum one Weapon and one Armor piece. The starter weapon must provide enough base physical damage so that the character deals meaningful damage to level 1 monsters (well above 1 damage). The starter armor must provide enough base defense to meaningfully reduce incoming damage from level 1 monsters (which currently deal ~13 damage). Generate these items using the existing lootGenerator.ts item generation logic at item level 1 with Common rarity, then immediately equip them to the character's weapon and armor slots. This must happen at character creation time so the player never starts a dungeon run unequipped.",
+        "id": "REQ-75",
+        "summary": "In CharacterSelectScreen.tsx, audit the 'Enter The Realm' button's onClick handler end-to-end. Identify and fix every reason the button produces zero feedback and does not navigate when clicked. Specifically: (1) confirm the button is not conditionally disabled or rendered without an onClick; (2) confirm the handler calls the onSelectCharacter (or equivalent) prop with the selected character's ID; (3) confirm no outer element is swallowing the click event (e.g. a pointer-events-none overlay or a stopPropagation call); (4) confirm the selected character state is non-null at the time the button is clicked so the ID passed is valid; (5) remove any guard or early-return that silently prevents the callback from firing.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/engine/lootGenerator.ts",
-          "frontend/src/components/CharacterCreation.tsx",
-          "frontend/src/hooks/useLocalCharacter.ts"
+          "frontend/src/components/CharacterSelectScreen.tsx"
         ],
         "matchedFiles": [
-          "frontend/src/engine/lootGenerator.ts",
-          "frontend/src/components/CharacterCreation.tsx",
-          "frontend/src/hooks/useLocalCharacter.ts"
+          "frontend/src/components/CharacterSelectScreen.tsx"
         ]
       },
       {
-        "id": "REQ-48",
-        "summary": "In DungeonSelectScreen.tsx, remove the non-functional drop rate percentage scroller/slider UI element. Replace it with a clean static informational display showing the current effective XP rate and drop rate for the selected monster level, calculated using the existing flat 6% base drop rate logic (6% base, reduced by 1% per level the monster is below the player's level, flooring at 0%). The display should be read-only text, matching the cleaner informational style used in prior versions of the screen.",
+        "id": "REQ-76",
+        "summary": "In App.tsx, audit the onSelectCharacter callback (or equivalent) that is passed as a prop to CharacterSelectScreen. Verify: (1) the callback is defined as a stable function (useCallback or equivalent) and is not undefined at render time; (2) it correctly writes the selected character's ID into App-level state (e.g. activeCharacterId); (3) after setting the ID it immediately updates the routing state to transition to the character sheet / dungeon select screen; (4) no intermediate loading flag, isLoading guard, or conditional render silently blocks the screen transition after the callback fires; (5) if any such guard exists, ensure it evaluates to false (i.e. not blocking) by the time the callback completes.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/components/DungeonSelectScreen.tsx"
+          "frontend/src/App.tsx"
         ],
         "matchedFiles": [
-          "frontend/src/components/DungeonSelectScreen.tsx"
+          "frontend/src/App.tsx"
         ]
       }
     ]
   },
   "changedFiles": [
-    "backend/main.mo",
-    "backend/migration.mo",
     "build-request.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
-    "frontend/src/components/CharacterCreation.tsx",
-    "frontend/src/components/DungeonSelectScreen.tsx",
-    "frontend/src/engine/lootGenerator.ts",
-    "frontend/src/hooks/useLocalCharacter.ts",
+    "frontend/src/App.tsx",
+    "frontend/src/components/CharacterSelectScreen.tsx",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

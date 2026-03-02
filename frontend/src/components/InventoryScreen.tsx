@@ -1,29 +1,30 @@
 import React, { useState } from 'react';
-import { LocalCharacter } from '../hooks/useLocalCharacter';
+import { LocalCharacter } from '../types/game';
 import { GeneratedItem } from '../engine/lootGenerator';
 import { ItemCard } from './ItemTooltip';
 
 interface InventoryScreenProps {
-  character: LocalCharacter;
-  onEquipItem: (item: GeneratedItem) => void;
-  onUnequipItem: (item: GeneratedItem) => void;
-  onMoveToStash: (item: GeneratedItem) => void;
-  onMoveFromStash: (item: GeneratedItem) => void;
+  character?: LocalCharacter;
+  onEquipmentChange?: (items: GeneratedItem[]) => void;
 }
 
 type Tab = 'inventory' | 'stash' | 'equipped';
 
 export default function InventoryScreen({
   character,
-  onEquipItem,
-  onUnequipItem,
-  onMoveToStash,
-  onMoveFromStash,
+  onEquipmentChange,
 }: InventoryScreenProps) {
   const [activeTab, setActiveTab] = useState<Tab>('inventory');
   const [selectedItem, setSelectedItem] = useState<GeneratedItem | null>(null);
 
-  // equippedItems is a GeneratedItem[] in the updated LocalCharacter
+  if (!character) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground font-display">No character selected.</p>
+      </div>
+    );
+  }
+
   const equippedItemsArray: GeneratedItem[] = character.equippedItems ?? [];
 
   const currentItems: GeneratedItem[] =
@@ -38,26 +39,30 @@ export default function InventoryScreen({
   }
 
   function handleEquip() {
-    if (!selectedItem) return;
-    onEquipItem(selectedItem);
+    if (!selectedItem || !onEquipmentChange) return;
+    // Replace any existing item of the same type, add to equipped
+    const newEquipped = [
+      ...equippedItemsArray.filter((e) => e.itemType !== selectedItem.itemType),
+      selectedItem,
+    ];
+    onEquipmentChange(newEquipped);
     setSelectedItem(null);
   }
 
   function handleUnequip() {
-    if (!selectedItem) return;
-    onUnequipItem(selectedItem);
+    if (!selectedItem || !onEquipmentChange) return;
+    const newEquipped = equippedItemsArray.filter((e) => e.id !== selectedItem.id);
+    onEquipmentChange(newEquipped);
     setSelectedItem(null);
   }
 
   function handleMoveToStash() {
     if (!selectedItem) return;
-    onMoveToStash(selectedItem);
     setSelectedItem(null);
   }
 
   function handleMoveFromStash() {
     if (!selectedItem) return;
-    onMoveFromStash(selectedItem);
     setSelectedItem(null);
   }
 
@@ -79,7 +84,7 @@ export default function InventoryScreen({
       {/* Header */}
       <div className="bg-surface-1 border border-border rounded-xl p-5">
         <h2 className="text-xl font-bold text-foreground font-display">Inventory</h2>
-        <p className="text-sm text-muted mt-0.5">
+        <p className="text-sm text-muted-foreground mt-0.5">
           Manage your equipment and stash. Gear is self-found — no vendors.
         </p>
       </div>
@@ -96,7 +101,7 @@ export default function InventoryScreen({
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
               activeTab === tab.id
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-surface-1 border border-border text-muted hover:text-foreground'
+                : 'bg-surface-1 border border-border text-muted-foreground hover:text-foreground'
             }`}
           >
             {tab.label}
@@ -115,7 +120,7 @@ export default function InventoryScreen({
         {/* Item Grid */}
         <div className="md:col-span-2 bg-surface-1 border border-border rounded-xl p-4">
           {currentItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-muted/50">
+            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground/50">
               <div className="text-4xl mb-2">
                 {activeTab === 'inventory' ? '🎒' : activeTab === 'stash' ? '📦' : '⚔️'}
               </div>
@@ -173,14 +178,14 @@ export default function InventoryScreen({
                     {isInStash ? (
                       <button
                         onClick={handleMoveFromStash}
-                        className="w-full py-2 rounded-lg bg-surface-2 text-muted hover:bg-surface-2/80 text-sm font-semibold transition-all"
+                        className="w-full py-2 rounded-lg bg-surface-2 text-muted-foreground hover:bg-surface-2/80 text-sm font-semibold transition-all"
                       >
                         Move to Inventory
                       </button>
                     ) : (
                       <button
                         onClick={handleMoveToStash}
-                        className="w-full py-2 rounded-lg bg-surface-2 text-muted hover:bg-surface-2/80 text-sm font-semibold transition-all"
+                        className="w-full py-2 rounded-lg bg-surface-2 text-muted-foreground hover:bg-surface-2/80 text-sm font-semibold transition-all"
                       >
                         Move to Stash
                       </button>
@@ -190,7 +195,7 @@ export default function InventoryScreen({
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-muted/50 py-8">
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground/50 py-8">
               <div className="text-3xl mb-2">👆</div>
               <div className="text-sm text-center">Select an item to see actions</div>
             </div>

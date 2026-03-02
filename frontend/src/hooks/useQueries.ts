@@ -1,25 +1,126 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useActor } from './useActor';
-import { Character, CharacterId, CharacterCreationError, Realm, SetHpError } from '../backend';
-
-export class CharacterAlreadyExistsError extends Error {
-  constructor() {
-    super('Character already exists');
-    this.name = 'CharacterAlreadyExistsError';
-  }
-}
+import {
+  Character,
+  CharacterCreationParams,
+  DungeonResult,
+  UserProfile,
+  MarketplaceListing,
+  CharacterCreationError,
+  SetHpError,
+} from '../backend';
 
 export class CharacterLimitReachedError extends Error {
   constructor() {
-    super('Maximum 8 characters reached');
+    super('Character limit reached');
     this.name = 'CharacterLimitReachedError';
   }
+}
+
+export function useGetCharacters() {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<Character[]>({
+    queryKey: ['characters'],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getCharacters();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useCreateCharacter() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: CharacterCreationParams) => {
+      if (!actor) throw new Error('Actor not available');
+      const result = await actor.createCharacter(params);
+      if (result.__kind__ === 'err') {
+        if (result.err === CharacterCreationError.limitReached) {
+          throw new CharacterLimitReachedError();
+        }
+        throw new Error(`Failed to create character: ${result.err}`);
+      }
+      return result.ok;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+    },
+  });
+}
+
+export function useDeleteCharacter() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (characterId: number) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.deleteCharacter(characterId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+    },
+  });
+}
+
+export function useSetCharacterHp() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ characterId, hp }: { characterId: number; hp: number }) => {
+      if (!actor) throw new Error('Actor not available');
+      const result = await actor.setCharacterHp(characterId, BigInt(Math.floor(hp)));
+      if (result.__kind__ === 'err') {
+        // Don't throw on alreadyFullHP - it's not a real error
+        if (result.err === SetHpError.alreadyFullHP) return;
+        throw new Error(`Failed to set HP: ${result.err}`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+    },
+  });
+}
+
+export function useSubmitDungeonResult() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (result: DungeonResult) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.submitDungeonResult(result);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+    },
+  });
+}
+
+export function useSpendStatPoints() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ characterId, pointsSpent }: { characterId: number; pointsSpent: number }) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.spendStatPoints(characterId, BigInt(pointsSpent));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+    },
+  });
 }
 
 export function useGetCallerUserProfile() {
   const { actor, isFetching: actorFetching } = useActor();
 
-  const query = useQuery({
+  const query = useQuery<UserProfile | null>({
     queryKey: ['currentUserProfile'],
     queryFn: async () => {
       if (!actor) throw new Error('Actor not available');
@@ -41,7 +142,7 @@ export function useSaveCallerUserProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (profile: { username: string }) => {
+    mutationFn: async (profile: UserProfile) => {
       if (!actor) throw new Error('Actor not available');
       await actor.saveCallerUserProfile(profile);
     },
@@ -51,85 +152,16 @@ export function useSaveCallerUserProfile() {
   });
 }
 
-export function useGetCharacters() {
-  const { actor, isFetching: actorFetching } = useActor();
-
-  return useQuery<Character[]>({
-    queryKey: ['characters'],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getCharacters();
-    },
-    enabled: !!actor && !actorFetching,
-  });
-}
-
-export function useCreateCharacter() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ name, realm }: { name: string; realm: Realm }) => {
-      if (!actor) throw new Error('Actor not available');
-      const result = await actor.createCharacter(name, realm);
-      if (result.__kind__ === 'err') {
-        if (result.err === CharacterCreationError.alreadyExists) {
-          throw new CharacterAlreadyExistsError();
-        }
-        if (result.err === CharacterCreationError.limitReached) {
-          throw new CharacterLimitReachedError();
-        }
-        throw new Error(`Character creation failed: ${result.err}`);
-      }
-      return result.ok;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['characters'] });
-    },
-  });
-}
-
-export function useDeleteCharacter() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (characterId: CharacterId) => {
-      if (!actor) throw new Error('Actor not available');
-      await actor.deleteCharacter(characterId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['characters'] });
-    },
-  });
-}
-
-export function useSetCharacterHp() {
-  const { actor } = useActor();
-
-  return useMutation({
-    mutationFn: async ({ characterId, hp }: { characterId: CharacterId; hp: number }) => {
-      if (!actor) throw new Error('Actor not available');
-      const result = await actor.setCharacterHp(characterId, BigInt(hp));
-      if (result.__kind__ === 'err') {
-        // alreadyFullHP is not a real error for our purposes
-        if (result.err === SetHpError.alreadyFullHP) return;
-        throw new Error(`Set HP failed: ${result.err}`);
-      }
-    },
-  });
-}
-
 export function useGetMarketplaceListings() {
-  const { actor, isFetching: actorFetching } = useActor();
+  const { actor, isFetching } = useActor();
 
-  return useQuery({
+  return useQuery<MarketplaceListing[]>({
     queryKey: ['marketplaceListings'],
     queryFn: async () => {
       if (!actor) return [];
       return actor.getMarketplaceListings();
     },
-    enabled: !!actor && !actorFetching,
+    enabled: !!actor && !isFetching,
   });
 }
 

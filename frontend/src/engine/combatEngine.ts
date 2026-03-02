@@ -1,447 +1,344 @@
-import { GeneratedItem, generateLoot } from './lootGenerator';
-import { ABILITIES, Ability } from '../data/abilities';
-import { MONSTER_TEMPLATES, generateMonsterDisplayName } from '../data/monsters';
-import type { LocalCharacter } from '../hooks/useLocalCharacter';
+import { LocalCharacter } from '../types/game';
+import { MonsterTemplate, getMonsterTemplates } from '../data/monsters';
+import { ABILITIES } from '../data/abilities';
+import { generateLoot, GeneratedItem } from './lootGenerator';
 
-export type { LocalCharacter };
+export const PLAYER_TICKS_BETWEEN_ATTACKS = 12;
 
-// ── Tick constants ──
-export const PLAYER_BASE_TICKS_BETWEEN_ATTACKS = 12;
-
-export function calculateEnemyTicksBetweenAttacks(level: number): number {
-  const clamped = Math.max(1, Math.min(100, level));
-  const ticks = 12 - ((10 / 99) * (clamped - 1));
-  return Math.max(2, Math.round(ticks));
+/**
+ * Returns the number of ticks between attacks for an enemy at the given level.
+ * Level 1 = 21 ticks, decreases by 1 every 5 levels, floor at 2.
+ */
+export function getEnemyTicksBetweenAttacks(level: number): number {
+  return Math.max(2, 21 - Math.floor((level - 1) / 5));
 }
 
-// ── Types ──
-
-export interface CombatStats {
-  hp: number;
-  maxHp: number;
-  physicalDamage: number;
-  magicDamage: number;
-  defense: number;
-  critChance: number;
-  ticksBetweenAttacks: number;
-  str: number;
-  dex: number;
-  int: number;
-  vit: number;
-}
-
-export interface MonsterInstance {
+export interface Monster {
+  id: string;
   name: string;
   level: number;
   hp: number;
   maxHp: number;
-  physicalDamage: number;
-  magicDamage: number;
+  attack: number;
   defense: number;
-  ticksBetweenAttacks: number;
   xpReward: number;
-  lootChance: number;
+  ticksBetweenAttacks: number;
+  template: MonsterTemplate;
 }
 
 export interface CombatLogEntry {
   tick: number;
-  actor: 'player' | 'monster';
-  action: string;
-  damage?: number;
-  healing?: number;
-  isCrit?: boolean;
-  abilityName?: string;
+  message: string;
+  type: 'player-attack' | 'enemy-attack' | 'player-ability' | 'enemy-death' | 'player-death' | 'info' | 'crit' | 'loot';
 }
 
 export interface CombatResult {
   victory: boolean;
-  ticksElapsed: number;
-  xpGained: number;
+  xpEarned: number;
+  finalPlayerHp: number;
   log: CombatLogEntry[];
-  playerHpRemaining: number;
-  monsterHpRemaining: number;
-  itemDropped: boolean;
-  penaltyApplied: boolean;
-  remainingHp: number;
-  lootDropped: GeneratedItem | null;
+  monstersDefeated: number;
+  loot: GeneratedItem[];
+  totalTicks: number;
 }
 
-// ── Stat derivation ──
+function getBaselineStats(level: number): { hp: number; attack: number; defense: number } {
+  const baseHp = 25 + (level - 1) * 8;
+  const baseAttack = 3 + Math.floor((level - 1) * 1.2);
+  const baseDefense = 1 + Math.floor((level - 1) * 0.8);
+  return { hp: baseHp, attack: baseAttack, defense: baseDefense };
+}
 
-export function derivePlayerStats(character: LocalCharacter): CombatStats {
-  let str = character.stats.str;
-  let dex = character.stats.dex;
-  let int = character.stats.int;
-  let vit = character.stats.vit;
-  let bonusPhysDmg = 0;
-  let bonusMagicDmg = 0;
-  let bonusDefense = 0;
-  let bonusCrit = 0;
-  let bonusHp = 0;
-  let baseWeaponDamage = 0;
-  let baseArmorDefense = 0;
+function computeStatPowerMultiplier(monster: Monster): number {
+  const baseline = getBaselineStats(monster.level);
+  const hpRatio = monster.maxHp / Math.max(1, baseline.hp);
+  const attackRatio = monster.attack / Math.max(1, baseline.attack);
+  const defenseRatio = monster.defense / Math.max(1, baseline.defense);
 
-  for (const item of character.equippedItems) {
-    for (const affix of item.affixes) {
-      if (affix.stat === 'str') str += affix.value;
-      else if (affix.stat === 'dex') dex += affix.value;
-      else if (affix.stat === 'int') int += affix.value;
-      else if (affix.stat === 'vit') vit += affix.value;
-      else if (affix.stat === 'physicalDamage') bonusPhysDmg += affix.value;
-      else if (affix.stat === 'magicDamage') bonusMagicDmg += affix.value;
-      else if (affix.stat === 'defense') bonusDefense += affix.value;
-      else if (affix.stat === 'critChance') bonusCrit += affix.value;
-      else if (affix.stat === 'hp') bonusHp += affix.value;
-    }
-    if (item.itemType === 'Weapon' && item.baseDamage) {
-      baseWeaponDamage += item.baseDamage;
-    }
-    if (item.itemType === 'Armor' && item.baseDefense) {
-      baseArmorDefense += item.baseDefense;
-    }
-  }
+  // Weighted composite: defense counts more since it makes fights harder
+  const composite = hpRatio * 0.35 + attackRatio * 0.3 + defenseRatio * 0.35;
 
-  const physicalDamage = Math.max(1, str * 2 + dex + baseWeaponDamage + bonusPhysDmg);
-  const magicDamage = Math.max(1, int * 2 + bonusMagicDmg);
-  const defense = Math.max(0, vit + dex + baseArmorDefense + bonusDefense);
-  const critChance = Math.min(0.75, 0.05 + dex * 0.005 + bonusCrit * 0.01);
-  const maxHp = Math.max(10, vit * 10 + 50 + bonusHp);
+  // Floor at 1.0 so XP is never reduced below base
+  return Math.max(1.0, composite);
+}
 
-  return {
-    hp: maxHp,
-    maxHp,
-    physicalDamage,
-    magicDamage,
+function getBaseXpForLevel(level: number): number {
+  return Math.floor(10 + (level - 1) * 15 + Math.pow(level - 1, 1.5) * 5);
+}
+
+export function generateMonster(dungeonLevel: number, floorNumber: number): Monster {
+  const templates = getMonsterTemplates();
+  const eligibleTemplates = templates.filter(t => {
+    const minLevel = Math.max(1, dungeonLevel - 5);
+    const maxLevel = dungeonLevel + 5;
+    return t.minLevel <= maxLevel && (t.maxLevel === undefined || t.maxLevel >= minLevel);
+  });
+
+  const template = eligibleTemplates[Math.floor(Math.random() * eligibleTemplates.length)] || templates[0];
+
+  const levelVariance = Math.floor(Math.random() * 5) - 2;
+  const monsterLevel = Math.max(1, dungeonLevel + levelVariance);
+
+  // Stat variance: some monsters get boosted stats (making them harder but more rewarding)
+  const hpVariance = 0.7 + Math.random() * 0.9; // 0.7x to 1.6x
+  const attackVariance = 0.8 + Math.random() * 0.7; // 0.8x to 1.5x
+  const defenseVariance = 0.7 + Math.random() * 0.9; // 0.7x to 1.6x
+
+  const baseHp = Math.floor((template.baseHp + (monsterLevel - 1) * 8) * hpVariance);
+  const baseAttack = Math.floor((template.baseAttack + Math.floor((monsterLevel - 1) * 1.2)) * attackVariance);
+  const baseDefense = Math.floor((template.baseDefense + Math.floor((monsterLevel - 1) * 0.8)) * defenseVariance);
+
+  const hp = Math.max(5, baseHp);
+  const attack = Math.max(1, baseAttack);
+  const defense = Math.max(0, baseDefense);
+
+  const ticksBetweenAttacks = getEnemyTicksBetweenAttacks(monsterLevel);
+
+  const monster: Monster = {
+    id: `${template.id}-${floorNumber}-${Date.now()}`,
+    name: template.name,
+    level: monsterLevel,
+    hp,
+    maxHp: hp,
+    attack,
     defense,
-    critChance,
-    ticksBetweenAttacks: PLAYER_BASE_TICKS_BETWEEN_ATTACKS,
-    str,
-    dex,
-    int,
-    vit,
-  };
-}
-
-// ── Monster spawning ──
-
-export function spawnMonster(level: number): MonsterInstance {
-  const template = MONSTER_TEMPLATES[Math.floor(Math.random() * MONSTER_TEMPLATES.length)];
-  const scaleFactor = 1 + (level - 1) * 0.15;
-  const scaledHp = Math.round(template.baseHp * scaleFactor);
-  const scaledPhysDmg = Math.round(template.baseAttack * scaleFactor);
-  const scaledMagicDmg = Math.round(template.baseAttack * 0.5 * scaleFactor);
-  const scaledDefense = Math.round(template.baseDefense * scaleFactor);
-  const xpReward = Math.round(template.xpReward * scaleFactor);
-  const lootChance = 0.06;
-  const ticksBetweenAttacks = calculateEnemyTicksBetweenAttacks(level);
-  const name = generateMonsterDisplayName(template.name);
-
-  return {
-    name,
-    level,
-    hp: scaledHp,
-    maxHp: scaledHp,
-    physicalDamage: scaledPhysDmg,
-    magicDamage: scaledMagicDmg,
-    defense: scaledDefense,
+    xpReward: 0, // will be set below after multiplier
     ticksBetweenAttacks,
-    xpReward,
-    lootChance,
+    template,
+  };
+
+  // Compute XP with stat-power multiplier
+  const baseXp = getBaseXpForLevel(monsterLevel);
+  const multiplier = computeStatPowerMultiplier(monster);
+  monster.xpReward = Math.floor(baseXp * multiplier);
+
+  return monster;
+}
+
+export function calculateDropRate(dungeonLevel: number): number {
+  return Math.min(0.8, 0.2 + dungeonLevel * 0.02);
+}
+
+export function getMaxMonsterLevel(dungeonLevel: number): number {
+  return dungeonLevel + 5;
+}
+
+interface CombatState {
+  playerHp: number;
+  playerMaxHp: number;
+  playerAttack: number;
+  playerDefense: number;
+  playerTicksBetweenAttacks: number;
+  playerTickCounter: number;
+  abilityTickCounter: number;
+  currentAbilityIndex: number;
+  monster: Monster;
+  tick: number;
+  log: CombatLogEntry[];
+}
+
+function getPlayerStats(character: LocalCharacter) {
+  const stats = character.stats;
+  return {
+    attack: stats.attack,
+    defense: stats.defense,
+    maxHp: stats.maxHp,
+    currentHp: stats.currentHp,
+    critChance: stats.critChance,
+    critPower: stats.critPower,
   };
 }
 
-// ── Drop rate calculation ──
+function resolveAbility(
+  ability: typeof ABILITIES[0],
+  state: CombatState,
+  character: LocalCharacter
+): { damage: number; message: string; type: CombatLogEntry['type'] } {
+  const playerStats = getPlayerStats(character);
+  const type: CombatLogEntry['type'] = 'player-ability';
 
-export function calculateDropRate(playerLevel: number, monsterLevel: number): number {
-  const levelDiff = playerLevel - monsterLevel;
-  const dropRate = Math.max(0, 6 - Math.max(0, levelDiff));
-  return dropRate;
-}
+  const multiplier = ability.damageMultiplier ?? 1.5;
 
-// ── Monster level cap ──
-
-export function getMaxMonsterLevel(playerLevel: number): number {
-  return playerLevel + 5;
-}
-
-// ── Ability cycling ──
-
-function rollAbilityOrAttack(equippedAbilityIds: string[]): Ability | null {
-  const validIds = equippedAbilityIds.filter(Boolean);
-  const count = Math.min(3, validIds.length);
-  if (count === 0) return null;
-
-  const roll = Math.random();
-  const abilityChanceEach = 0.125;
-  const totalAbilityChance = count * abilityChanceEach;
-
-  if (roll >= totalAbilityChance) return null;
-
-  const abilityIndex = Math.floor(roll / abilityChanceEach);
-  const abilityId = validIds[Math.min(abilityIndex, validIds.length - 1)];
-  return ABILITIES.find((a) => a.id === abilityId) ?? null;
-}
-
-// ── Ability application ──
-
-interface AbilityResult {
-  damage: number;
-  healing: number;
-  isCrit: boolean;
-}
-
-function applyAbility(
-  ability: Ability,
-  playerStats: CombatStats,
-  monster: MonsterInstance
-): AbilityResult {
-  const isCrit = Math.random() < playerStats.critChance;
-  const multiplier = ability.damageMultiplier ?? 1.0;
-  const critMult = isCrit ? 2 : 1;
-
-  // Healing ability: effectType === 'heal'
-  if (ability.effectType === 'heal') {
-    const healAmount = Math.round(playerStats.maxHp * multiplier);
-    return { damage: 0, healing: healAmount, isCrit };
-  }
-
-  let baseDmg: number;
-  if (ability.damageType === 'magic') {
-    baseDmg = playerStats.magicDamage * multiplier * critMult;
-    const dmg = Math.max(1, baseDmg - monster.defense * 0.1);
-    return { damage: Math.round(dmg), healing: 0, isCrit };
+  let damage: number;
+  if (ability.damageType === 'physical') {
+    damage = Math.floor(playerStats.attack * multiplier);
+  } else if (ability.damageType === 'magic') {
+    damage = Math.floor(playerStats.attack * multiplier * 1.1);
   } else {
-    baseDmg = playerStats.physicalDamage * multiplier * critMult;
-    const dmg = Math.max(1, baseDmg - monster.defense);
-    return { damage: Math.round(dmg), healing: 0, isCrit };
+    // 'true' damage — ignores defense
+    damage = Math.floor(playerStats.attack * multiplier);
   }
-}
 
-// ── Combat simulation ──
+  // Apply defense reduction (except for true damage)
+  const effectiveDamage = ability.damageType === 'true'
+    ? Math.max(1, damage)
+    : Math.max(1, damage - Math.floor(state.monster.defense * 0.5));
+
+  const message = `You use ${ability.name} on ${state.monster.name} for ${effectiveDamage} damage!`;
+
+  return { damage: effectiveDamage, message, type };
+}
 
 export function simulateCombat(
   character: LocalCharacter,
-  monster: MonsterInstance,
-  currentHp?: number,
-  maxTicks = 500
+  monsters: Monster[],
+  maxTicks: number = 2000
 ): CombatResult {
-  const playerStats = derivePlayerStats(character);
+  const playerStats = getPlayerStats(character);
+  // Support both abilities and equippedAbilities for backward compat
+  const abilityIds = character.equippedAbilities?.length
+    ? character.equippedAbilities
+    : (character.abilities || []);
+  const abilities = abilityIds
+    .map(id => ABILITIES.find(a => a.id === id))
+    .filter(Boolean) as typeof ABILITIES;
 
-  const maxAllowedLevel = getMaxMonsterLevel(character.level);
-  if (monster.level > maxAllowedLevel) {
-    throw new Error(
-      `Monster level ${monster.level} exceeds maximum allowed level ${maxAllowedLevel}`
-    );
-  }
-
-  // Use provided currentHp (persistent HP) or fall back to maxHp
-  let playerHp = currentHp !== undefined
-    ? Math.max(1, Math.min(currentHp, playerStats.maxHp))
-    : playerStats.maxHp;
-  let monsterHp = monster.hp;
-  let playerAttackCooldown = 0;
-  let monsterAttackCooldown = 0;
+  let playerHp = playerStats.currentHp;
+  const playerMaxHp = playerStats.maxHp;
   const log: CombatLogEntry[] = [];
+  let totalXp = 0;
+  let monstersDefeated = 0;
+  const loot: GeneratedItem[] = [];
+  let totalTicks = 0;
 
-  for (let tick = 0; tick < maxTicks; tick++) {
-    if (playerAttackCooldown <= 0) {
-      const equippedAbilityIds = character.equippedAbilityIds ?? [];
-      const ability = rollAbilityOrAttack(equippedAbilityIds);
+  const ABILITY_CYCLE_TICKS = 8;
 
-      if (ability) {
-        const abilityResult = applyAbility(ability, playerStats, monster);
-        if (abilityResult.healing > 0) {
-          playerHp = Math.min(playerStats.maxHp, playerHp + abilityResult.healing);
-          log.push({
-            tick,
-            actor: 'player',
-            action: `uses ${ability.name}`,
-            healing: abilityResult.healing,
-            isCrit: abilityResult.isCrit,
-            abilityName: ability.name,
-          });
-        } else {
-          monsterHp = Math.max(0, monsterHp - abilityResult.damage);
-          log.push({
-            tick,
-            actor: 'player',
-            action: `uses ${ability.name}`,
-            damage: abilityResult.damage,
-            isCrit: abilityResult.isCrit,
-            abilityName: ability.name,
-          });
+  for (const monster of monsters) {
+    if (playerHp <= 0) break;
+
+    const state: CombatState = {
+      playerHp,
+      playerMaxHp,
+      playerAttack: playerStats.attack,
+      playerDefense: playerStats.defense,
+      playerTicksBetweenAttacks: PLAYER_TICKS_BETWEEN_ATTACKS,
+      playerTickCounter: 0,
+      abilityTickCounter: 0,
+      currentAbilityIndex: 0,
+      monster: { ...monster },
+      tick: 0,
+      log,
+    };
+
+    log.push({
+      tick: totalTicks,
+      message: `You encounter a ${monster.name} (Level ${monster.level}) — HP: ${monster.hp}, ATK: ${monster.attack}, DEF: ${monster.defense}`,
+      type: 'info',
+    });
+
+    let monsterDefeated = false;
+
+    while (state.playerHp > 0 && state.monster.hp > 0 && state.tick < maxTicks) {
+      state.tick++;
+      totalTicks++;
+      state.playerTickCounter++;
+      state.abilityTickCounter++;
+
+      // Player basic attack
+      if (state.playerTickCounter >= state.playerTicksBetweenAttacks) {
+        state.playerTickCounter = 0;
+
+        const isCrit = Math.random() * 100 < playerStats.critChance;
+        let rawDamage = Math.max(1, state.playerAttack - Math.floor(state.monster.defense * 0.4));
+        if (isCrit) {
+          rawDamage = Math.floor(rawDamage * (1 + playerStats.critPower / 100));
         }
-      } else {
-        const isCrit = Math.random() < playerStats.critChance;
-        const rawDmg = playerStats.physicalDamage * (isCrit ? 2 : 1);
-        const dmg = Math.max(1, rawDmg - monster.defense);
-        monsterHp = Math.max(0, monsterHp - dmg);
+
+        state.monster.hp -= rawDamage;
+
+        const critText = isCrit ? ' (Critical Hit!)' : '';
         log.push({
-          tick,
-          actor: 'player',
-          action: 'attacks',
-          damage: Math.round(dmg),
-          isCrit,
+          tick: totalTicks,
+          message: `You attack ${state.monster.name} for ${rawDamage} damage${critText}. (${Math.max(0, state.monster.hp)}/${state.monster.maxHp} HP remaining)`,
+          type: isCrit ? 'crit' : 'player-attack',
         });
       }
 
-      playerAttackCooldown = playerStats.ticksBetweenAttacks;
-    }
+      // Player ability
+      if (abilities.length > 0 && state.abilityTickCounter >= ABILITY_CYCLE_TICKS && state.monster.hp > 0) {
+        state.abilityTickCounter = 0;
+        const ability = abilities[state.currentAbilityIndex % abilities.length];
+        state.currentAbilityIndex++;
 
-    if (monsterHp <= 0) break;
+        const { damage, message, type } = resolveAbility(ability, state, character);
+        state.monster.hp -= damage;
 
-    if (monsterAttackCooldown <= 0) {
-      const isCrit = Math.random() < 0.05;
-      const rawDmg = monster.physicalDamage * (isCrit ? 1.5 : 1);
-      const dmg = Math.max(1, rawDmg - playerStats.defense * 0.3);
-      playerHp = Math.max(0, playerHp - dmg);
-      log.push({
-        tick,
-        actor: 'monster',
-        action: 'attacks',
-        damage: Math.round(dmg),
-        isCrit,
-      });
-      monsterAttackCooldown = monster.ticksBetweenAttacks;
-    }
-
-    if (playerHp <= 0) break;
-
-    playerAttackCooldown--;
-    monsterAttackCooldown--;
-  }
-
-  const victory = monsterHp <= 0;
-  const xpGained = victory ? monster.xpReward : Math.round(monster.xpReward * 0.1);
-
-  const dropRatePct = victory ? calculateDropRate(character.level, monster.level) : 0;
-  const itemDropped = Math.random() * 100 < dropRatePct;
-  const lootDropped = itemDropped ? generateLoot(monster.level) : null;
-
-  const remainingHp = Math.round(playerHp);
-
-  return {
-    victory,
-    ticksElapsed: log.length,
-    xpGained,
-    log,
-    playerHpRemaining: remainingHp,
-    monsterHpRemaining: Math.round(monsterHp),
-    itemDropped,
-    penaltyApplied: false,
-    remainingHp,
-    lootDropped,
-  };
-}
-
-// ── Ascension Trial ──
-
-export interface AscensionTrialResult {
-  victory: boolean;
-  xpGained: number;
-  log: CombatLogEntry[];
-  playerHpRemaining: number;
-  penaltyApplied: boolean;
-  itemDropped: boolean;
-}
-
-export function simulateAscensionTrial(
-  character: LocalCharacter,
-  currentHp?: number
-): AscensionTrialResult {
-  const trialLevel = character.level + 5;
-  const monster = spawnMonster(trialLevel);
-  monster.name = `Trial Champion (Lv ${trialLevel})`;
-
-  const playerStats = derivePlayerStats(character);
-  let playerHp = currentHp !== undefined
-    ? Math.max(1, Math.min(currentHp, playerStats.maxHp))
-    : playerStats.maxHp;
-  let monsterHp = monster.hp;
-  let playerAttackCooldown = 0;
-  let monsterAttackCooldown = 0;
-  const log: CombatLogEntry[] = [];
-  const maxTicks = 1000;
-
-  for (let tick = 0; tick < maxTicks; tick++) {
-    if (playerAttackCooldown <= 0) {
-      const equippedAbilityIds = character.equippedAbilityIds ?? [];
-      const ability = rollAbilityOrAttack(equippedAbilityIds);
-
-      if (ability) {
-        const abilityResult = applyAbility(ability, playerStats, monster);
-        if (abilityResult.healing > 0) {
-          playerHp = Math.min(playerStats.maxHp, playerHp + abilityResult.healing);
-          log.push({
-            tick,
-            actor: 'player',
-            action: `uses ${ability.name}`,
-            healing: abilityResult.healing,
-            isCrit: abilityResult.isCrit,
-            abilityName: ability.name,
-          });
-        } else {
-          monsterHp = Math.max(0, monsterHp - abilityResult.damage);
-          log.push({
-            tick,
-            actor: 'player',
-            action: `uses ${ability.name}`,
-            damage: abilityResult.damage,
-            isCrit: abilityResult.isCrit,
-            abilityName: ability.name,
-          });
-        }
-      } else {
-        const isCrit = Math.random() < playerStats.critChance;
-        const rawDmg = playerStats.physicalDamage * (isCrit ? 2 : 1);
-        const dmg = Math.max(1, rawDmg - monster.defense);
-        monsterHp = Math.max(0, monsterHp - dmg);
         log.push({
-          tick,
-          actor: 'player',
-          action: 'attacks',
-          damage: Math.round(dmg),
-          isCrit,
+          tick: totalTicks,
+          message: `${message} (${Math.max(0, state.monster.hp)}/${state.monster.maxHp} HP remaining)`,
+          type,
         });
       }
-      playerAttackCooldown = playerStats.ticksBetweenAttacks;
+
+      // Enemy attack
+      if (state.monster.hp > 0 && state.tick % state.monster.ticksBetweenAttacks === 0) {
+        const enemyDamage = Math.max(1, state.monster.attack - Math.floor(state.playerDefense * 0.4));
+        state.playerHp -= enemyDamage;
+
+        log.push({
+          tick: totalTicks,
+          message: `${state.monster.name} attacks you for ${enemyDamage} damage. (${Math.max(0, state.playerHp)}/${state.playerMaxHp} HP remaining)`,
+          type: 'enemy-attack',
+        });
+      }
+
+      // Check monster death
+      if (state.monster.hp <= 0) {
+        monsterDefeated = true;
+        monstersDefeated++;
+        totalXp += monster.xpReward;
+
+        log.push({
+          tick: totalTicks,
+          message: `${state.monster.name} has been defeated! You earn ${monster.xpReward} XP.`,
+          type: 'enemy-death',
+        });
+
+        // Loot check
+        const dropRate = calculateDropRate(monster.level);
+        if (Math.random() < dropRate) {
+          const item = generateLoot(monster.level);
+          if (item) {
+            loot.push(item);
+            log.push({
+              tick: totalTicks,
+              message: `${state.monster.name} dropped: ${item.name}!`,
+              type: 'loot',
+            });
+          }
+        }
+        break;
+      }
+
+      // Check player death
+      if (state.playerHp <= 0) {
+        log.push({
+          tick: totalTicks,
+          message: `You have been slain by ${state.monster.name}!`,
+          type: 'player-death',
+        });
+        break;
+      }
     }
 
-    if (monsterHp <= 0) break;
+    playerHp = state.playerHp;
 
-    if (monsterAttackCooldown <= 0) {
-      const isCrit = Math.random() < 0.05;
-      const rawDmg = monster.physicalDamage * (isCrit ? 1.5 : 1);
-      const dmg = Math.max(1, rawDmg - playerStats.defense * 0.3);
-      playerHp = Math.max(0, playerHp - dmg);
+    if (!monsterDefeated && state.monster.hp > 0 && state.tick >= maxTicks) {
       log.push({
-        tick,
-        actor: 'monster',
-        action: 'attacks',
-        damage: Math.round(dmg),
-        isCrit,
+        tick: totalTicks,
+        message: `The battle with ${state.monster.name} drags on too long — you retreat!`,
+        type: 'info',
       });
-      monsterAttackCooldown = monster.ticksBetweenAttacks;
     }
-
-    if (playerHp <= 0) break;
-
-    playerAttackCooldown--;
-    monsterAttackCooldown--;
   }
 
-  const victory = monsterHp <= 0;
-  const xpGained = victory
-    ? Math.round(monster.xpReward * 1.5)
-    : Math.round(monster.xpReward * 0.1);
-  const itemDropped = victory && Math.random() < 0.06;
-
   return {
-    victory,
-    xpGained,
+    victory: playerHp > 0,
+    xpEarned: totalXp,
+    finalPlayerHp: Math.max(0, playerHp),
     log,
-    playerHpRemaining: Math.round(playerHp),
-    penaltyApplied: false,
-    itemDropped,
+    monstersDefeated,
+    loot,
+    totalTicks,
   };
 }

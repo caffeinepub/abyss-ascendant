@@ -1,143 +1,101 @@
-// Core game types used throughout the frontend
-// Backend types are imported from 'src/backend'
+import type { GeneratedItem } from '../engine/lootGenerator';
 
-export type Screen =
-  | 'login'
-  | 'profile-setup'
-  | 'character-creation'
-  | 'character-sheet'
-  | 'dungeon-select'
-  | 'dungeon-run'
-  | 'inventory'
-  | 'marketplace'
-  | 'leaderboard'
-  | 'professions'
-  | 'shrines';
+export type StatKey = 'str' | 'dex' | 'int' | 'vit';
 
-// DungeonMode: Catacombs and Depths replaced by numeric level input.
-// Only AscensionTrial remains as a named mode.
-export type DungeonMode = 'AscensionTrial';
-
-export interface DungeonRunConfig {
-  mode: DungeonMode | 'Standard';
-  monsterLevel: number;
-}
-
-export interface LocalItem {
-  id: string;
-  name: string;
-  itemType: 'Weapon' | 'Armor' | 'Trinket';
-  rarity: 'Common' | 'Uncommon' | 'Rare' | 'Legendary';
-  stats: {
-    str: number;
-    dex: number;
-    int: number;
-    vit: number;
-    bonus: string;
-  };
-  affixes: ItemAffix[];
-  owner?: string;
-}
-
-export interface ItemAffix {
-  name: string;
-  value: number;
-  type: 'str' | 'dex' | 'int' | 'vit' | 'damage' | 'defense' | 'crit' | 'regen' | 'speed';
-}
-
-export interface EquippedItems {
-  weapon: LocalItem | null;
-  armor: LocalItem | null;
-  trinket: LocalItem | null;
-}
-
-export interface EquippedAbilities {
-  slot1: string | null;
-  slot2: string | null;
-  slot3: string | null;
-}
-
-// LocalCharacterState — kept for backward compatibility with LevelUpModal and other components
-export interface LocalCharacterState {
-  name: string;
-  realm: 'Softcore' | 'Hardcore';
-  classTier: number;
-  level: number;
-  xp: number;
-  season: number;
-  status: 'Alive' | 'Dead';
+export interface BaseStats {
   str: number;
   dex: number;
   int: number;
   vit: number;
-  statPoints: number;
-  inventory: LocalItem[];
-  stash: LocalItem[];
-  equipped: EquippedItems;
-  equippedAbilities: EquippedAbilities;
+}
+
+export interface CharacterStats extends BaseStats {
+  maxHp: number;
+  currentHp: number;
+  attack: number;
+  defense: number;
+  critChance: number;
+  critPower: number;
+}
+
+export type Realm = 'Softcore' | 'Hardcore';
+export type CharacterStatus = 'Alive' | 'Dead';
+
+export interface LocalCharacter {
+  id: number;
+  name: string;
+  realm: Realm;
+  level: number;
+  xp: number;
+  season: number;
+  status: CharacterStatus;
+  stats: CharacterStats;
+  baseStats: BaseStats;
+  abilities: string[];
+  equippedAbilities: string[];
+  equippedItems: GeneratedItem[];
+  inventory: GeneratedItem[];
+  stash: GeneratedItem[];
+  pendingStatPoints: number;
+  totalStatPointsEarned: number;
+  totalStatPointsSpent: number;
   abilityPoints: number;
-  gold: number;
 }
 
-export interface CombatLogEntry {
-  tick: number;
-  message: string;
-  type: 'player-attack' | 'monster-attack' | 'ability' | 'crit' | 'heal' | 'system' | 'victory' | 'defeat';
+export const XP_PER_LEVEL = 100;
+export const MAX_LEVEL = 50;
+export const BASE_CRIT_CHANCE = 5;
+export const BASE_CRIT_POWER = 50;
+
+export function xpForLevel(level: number): number {
+  return level * XP_PER_LEVEL;
 }
 
-export interface CombatState {
-  playerHp: number;
-  playerMaxHp: number;
-  monsterHp: number;
-  monsterMaxHp: number;
-  monsterName: string;
-  tick: number;
-  log: CombatLogEntry[];
-  status: 'idle' | 'running' | 'victory' | 'defeat';
-  xpGained: number;
-  lootDrops: LocalItem[];
+/** Alias kept for backward compatibility */
+export const getXpForLevel = xpForLevel;
+
+export function calculateLevel(totalXp: number): number {
+  let level = 1;
+  let xpNeeded = 0;
+  while (level < MAX_LEVEL) {
+    xpNeeded += xpForLevel(level);
+    if (totalXp < xpNeeded) break;
+    level++;
+  }
+  return level;
 }
 
-export const CLASS_TIERS: Record<number, { name: string; title: string; color: string; ascensionLevel: number }> = {
-  1: { name: 'Wanderer', title: 'The Wanderer', color: 'text-rarity-common', ascensionLevel: 10 },
-  2: { name: 'Seeker', title: 'The Seeker', color: 'text-rarity-uncommon', ascensionLevel: 20 },
-  3: { name: 'Vanguard', title: 'The Vanguard', color: 'text-rarity-rare', ascensionLevel: 35 },
-  4: { name: 'Ascendant', title: 'The Ascendant', color: 'text-rarity-legendary', ascensionLevel: 50 },
-  5: { name: 'Eternal', title: 'The Eternal', color: 'legendary-shimmer', ascensionLevel: 999 },
-};
-
-export const XP_PER_LEVEL: number[] = [
-  0,      // level 1
-  100,    // level 2
-  250,    // level 3
-  450,    // level 4
-  700,    // level 5
-  1000,   // level 6
-  1400,   // level 7
-  1900,   // level 8
-  2500,   // level 9
-  3200,   // level 10
-  4000,   // level 11
-  5000,   // level 12
-  6200,   // level 13
-  7600,   // level 14
-  9200,   // level 15
-  11000,  // level 16
-  13000,  // level 17
-  15500,  // level 18
-  18500,  // level 19
-  22000,  // level 20
-];
+export function xpToNextLevel(totalXp: number): { current: number; needed: number; level: number } {
+  const level = calculateLevel(totalXp);
+  let xpUsed = 0;
+  for (let l = 1; l < level; l++) {
+    xpUsed += xpForLevel(l);
+  }
+  const current = totalXp - xpUsed;
+  const needed = xpForLevel(level);
+  return { current, needed, level };
+}
 
 /**
- * Returns the total XP required to reach the given level.
- * Exported for use in XPBar and other components.
+ * Single source of truth for available ability points.
+ * Formula: 1 + floor((level - 1) / 10)
  */
-export function getXpForLevel(level: number): number {
-  if (level <= 1) return 0;
-  if (level - 1 < XP_PER_LEVEL.length) return XP_PER_LEVEL[level - 1];
-  // Beyond level 20: extrapolate
-  const base = XP_PER_LEVEL[XP_PER_LEVEL.length - 1];
-  const extra = (level - XP_PER_LEVEL.length) * 5000;
-  return base + extra;
+export function calculateAvailableAbilityPoints(level: number): number {
+  return 1 + Math.floor((level - 1) / 10);
+}
+
+/**
+ * Single source of truth for max HP calculation.
+ * Formula: max(10, vit * 10 + 50 + bonusHp)
+ */
+export function calculateMaxHp(vit: number, bonusHp: number = 0): number {
+  return Math.max(10, vit * 10 + 50 + bonusHp);
+}
+
+/**
+ * Single source of truth for unspent stat points.
+ * Formula: totalStatPointsEarned - totalStatPointsSpent
+ */
+export function calculateUnspentStatPoints(totalStatPointsEarned: number, totalStatPointsSpent: number): number {
+  return Math.max(0, totalStatPointsEarned - totalStatPointsSpent);
 }

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { LocalCharacter } from '../hooks/useLocalCharacter';
+import { LocalCharacter } from '../types/game';
 import { GeneratedItem } from '../engine/lootGenerator';
 import { useGetMarketplaceListings, useListItemForSale, useBuyItem } from '../hooks/useQueries';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 
 interface MarketplaceScreenProps {
-  character: LocalCharacter;
+  character: LocalCharacter | null;
 }
 
 const RARITY_COLORS: Record<string, string> = {
@@ -31,7 +31,9 @@ export default function MarketplaceScreen({ character }: MarketplaceScreenProps)
   const listItemMutation = useListItemForSale();
   const buyItemMutation = useBuyItem();
 
-  const inventoryItems: GeneratedItem[] = [...character.inventory, ...character.stash];
+  const inventoryItems: GeneratedItem[] = character
+    ? [...character.inventory, ...character.stash]
+    : [];
 
   function handleListItem(item: GeneratedItem) {
     setListingItemId(item.id);
@@ -40,43 +42,35 @@ export default function MarketplaceScreen({ character }: MarketplaceScreenProps)
 
   async function handleConfirmListing() {
     if (!listingItemId || !listingPrice) return;
-    const priceIcp = parseFloat(listingPrice);
-    if (isNaN(priceIcp) || priceIcp <= 0) return;
-    const priceE8s = BigInt(Math.floor(priceIcp * 100_000_000));
-    await listItemMutation.mutateAsync({ itemId: listingItemId, price: priceE8s });
-    setListingItemId(null);
-    setListingPrice('');
+    const price = parseInt(listingPrice, 10);
+    if (isNaN(price) || price <= 0) return;
+    try {
+      await listItemMutation.mutateAsync({ itemId: listingItemId, price: BigInt(price) });
+      setListingItemId(null);
+      setListingPrice('');
+    } catch {
+      // error handled by mutation state
+    }
   }
 
-  async function handleBuy(itemId: string) {
-    await buyItemMutation.mutateAsync(itemId);
+  async function handleBuyItem(itemId: string) {
+    try {
+      await buyItemMutation.mutateAsync(itemId);
+    } catch {
+      // error handled by mutation state
+    }
   }
+
+  const callerPrincipal = identity?.getPrincipal().toString();
 
   return (
-    <div className="max-w-3xl mx-auto p-4 space-y-4">
+    <div className="max-w-4xl mx-auto p-4 space-y-4">
       {/* Header */}
       <div className="bg-surface-1 border border-border rounded-xl p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-foreground font-display">⚖️ Marketplace</h2>
-            <p className="text-sm text-muted mt-0.5">
-              Trade gear with other adventurers using ICP tokens.
-            </p>
-          </div>
-          {identity && (
-            <div className="text-right text-sm">
-              <div className="text-muted text-xs">Wallet</div>
-              <div className="text-foreground font-mono text-xs truncate max-w-[120px]">
-                {identity.getPrincipal().toString().slice(0, 12)}…
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-3 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400">
-          💡 All listings are priced in <strong>ICP</strong>. A 2% listing fee applies to all sales.
-          Real ICP transactions coming soon.
-        </div>
+        <h2 className="text-xl font-bold text-foreground font-display">Marketplace</h2>
+        <p className="text-sm text-muted mt-0.5">
+          Buy and sell items with other adventurers.
+        </p>
       </div>
 
       {/* Tabs */}
@@ -85,141 +79,107 @@ export default function MarketplaceScreen({ character }: MarketplaceScreenProps)
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold capitalize transition-all ${
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${
               activeTab === tab
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-surface-1 border border-border text-muted hover:text-foreground'
             }`}
           >
-            {tab === 'browse' ? '🔍 Browse' : '💰 Sell'}
+            {tab === 'browse' ? '🛒 Browse' : '💰 Sell'}
           </button>
         ))}
       </div>
 
-      {/* Browse Tab */}
       {activeTab === 'browse' && (
         <div className="bg-surface-1 border border-border rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-3">
-            Active Listings
-          </h3>
           {listingsLoading ? (
-            <div className="text-center text-muted py-8 animate-pulse">Loading listings…</div>
+            <div className="text-center py-8 text-muted">Loading listings...</div>
           ) : listings.length === 0 ? (
-            <div className="text-center text-muted py-8">
-              <div className="text-3xl mb-2">📭</div>
-              <div>No items listed yet.</div>
-              <div className="text-xs mt-1">Be the first to list an item!</div>
+            <div className="text-center py-8 text-muted">
+              <div className="text-4xl mb-2">🏪</div>
+              <div>No items listed for sale yet.</div>
             </div>
           ) : (
-            <div className="space-y-2">
-              {listings
-                .filter((l) => l.active)
-                .map((listing) => {
-                  const priceIcp = Number(listing.price) / 100_000_000;
-                  const isOwn =
-                    identity &&
-                    listing.seller.toString() === identity.getPrincipal().toString();
-                  return (
-                    <div
-                      key={listing.item.id}
-                      className="flex items-center gap-3 bg-surface-2 rounded-lg p-3"
-                    >
-                      <span className="text-2xl">
-                        {ITEM_TYPE_ICONS[listing.item.itemType] ?? '📦'}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className={`font-semibold text-sm ${
-                            RARITY_COLORS[listing.item.rarity] ?? 'text-foreground'
-                          }`}
-                        >
-                          {listing.item.name}
-                        </div>
-                        <div className="text-xs text-muted">
-                          {listing.item.rarity} {listing.item.itemType}
-                        </div>
+            <div className="space-y-3">
+              {listings.map((listing) => {
+                const isOwnListing = listing.seller.toString() === callerPrincipal;
+                return (
+                  <div
+                    key={listing.item.id}
+                    className="flex items-center gap-3 bg-surface-2 rounded-lg p-3 border border-border"
+                  >
+                    <span className="text-2xl">{ITEM_TYPE_ICONS[listing.item.itemType as string] || '📦'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-medium text-sm ${RARITY_COLORS[listing.item.rarity as string] || 'text-foreground'}`}>
+                        {listing.item.name}
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-primary">
-                          {priceIcp.toFixed(4)} ICP
-                        </div>
-                        {!isOwn && (
-                          <button
-                            onClick={() => handleBuy(listing.item.id)}
-                            disabled={buyItemMutation.isPending}
-                            className="text-xs mt-1 px-3 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 transition-all"
-                          >
-                            {buyItemMutation.isPending ? '…' : 'Buy'}
-                          </button>
-                        )}
-                        {isOwn && (
-                          <span className="text-xs text-muted">Your listing</span>
-                        )}
+                      <div className="text-xs text-muted">
+                        {listing.item.itemType as string} · {listing.item.rarity as string}
                       </div>
                     </div>
-                  );
-                })}
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-yellow-400">{Number(listing.price)} gold</div>
+                      {!isOwnListing && (
+                        <button
+                          onClick={() => handleBuyItem(listing.item.id)}
+                          disabled={buyItemMutation.isPending}
+                          className="text-xs mt-1 px-2 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-all disabled:opacity-50"
+                        >
+                          Buy
+                        </button>
+                      )}
+                      {isOwnListing && (
+                        <span className="text-xs text-muted">Your listing</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* Sell Tab */}
       {activeTab === 'sell' && (
         <div className="bg-surface-1 border border-border rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-3">
-            Your Inventory
-          </h3>
           {inventoryItems.length === 0 ? (
-            <div className="text-center text-muted py-8">
-              <div className="text-3xl mb-2">🎒</div>
-              <div>No items to sell.</div>
-              <div className="text-xs mt-1">Find gear in dungeons first!</div>
+            <div className="text-center py-8 text-muted">
+              <div className="text-4xl mb-2">🎒</div>
+              <div>No items in your inventory or stash to sell.</div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {inventoryItems.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3 bg-surface-2 rounded-lg p-3"
+                  className="flex items-center gap-3 bg-surface-2 rounded-lg p-3 border border-border"
                 >
-                  <span className="text-2xl">{item.icon ?? ITEM_TYPE_ICONS[item.itemType] ?? '📦'}</span>
+                  <span className="text-2xl">{item.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <div
-                      className={`font-semibold text-sm ${
-                        RARITY_COLORS[item.rarity] ?? 'text-foreground'
-                      }`}
-                    >
+                    <div className={`font-medium text-sm ${RARITY_COLORS[item.rarity as string] || 'text-foreground'}`}>
                       {item.name}
                     </div>
-                    <div className="text-xs text-muted">
-                      {item.rarity} {item.itemType}
-                    </div>
+                    <div className="text-xs text-muted">{item.itemType} · {item.rarity as string}</div>
                   </div>
                   {listingItemId === item.id ? (
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          value={listingPrice}
-                          onChange={(e) => setListingPrice(e.target.value)}
-                          placeholder="ICP price"
-                          min="0.0001"
-                          step="0.0001"
-                          className="w-24 bg-surface-1 border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                        />
-                        <span className="text-xs text-muted">ICP</span>
-                      </div>
+                      <input
+                        type="number"
+                        value={listingPrice}
+                        onChange={(e) => setListingPrice(e.target.value)}
+                        placeholder="Price"
+                        className="w-20 bg-background border border-border rounded px-2 py-1 text-sm text-foreground"
+                      />
                       <button
                         onClick={handleConfirmListing}
-                        disabled={listItemMutation.isPending || !listingPrice}
-                        className="text-xs px-2 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50"
+                        disabled={listItemMutation.isPending}
+                        className="text-xs px-2 py-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/30 transition-all disabled:opacity-50"
                       >
-                        {listItemMutation.isPending ? '…' : 'List'}
+                        List
                       </button>
                       <button
                         onClick={() => setListingItemId(null)}
-                        className="text-xs px-2 py-1 rounded bg-surface-2 text-muted hover:bg-surface-2/80"
+                        className="text-xs px-2 py-1 rounded bg-surface-1 text-muted hover:text-foreground transition-all"
                       >
                         Cancel
                       </button>
@@ -227,7 +187,7 @@ export default function MarketplaceScreen({ character }: MarketplaceScreenProps)
                   ) : (
                     <button
                       onClick={() => handleListItem(item)}
-                      className="text-xs px-3 py-1.5 rounded bg-primary/20 text-primary hover:bg-primary/30 font-semibold transition-all"
+                      className="text-xs px-3 py-1.5 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-all"
                     >
                       Sell
                     </button>
