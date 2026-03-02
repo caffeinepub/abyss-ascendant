@@ -103,6 +103,12 @@ export interface AdvancedStats {
 export interface _CaffeineStorageRefillInformation {
     proposed_top_up_amount?: bigint;
 }
+export interface StatsUpdate {
+    vitIncrease: bigint;
+    strIncrease: bigint;
+    intIncrease: bigint;
+    dexIncrease: bigint;
+}
 export interface _CaffeineStorageCreateCertificateResult {
     method: string;
     blob_hash: string;
@@ -111,6 +117,8 @@ export interface Character {
     xp: bigint;
     status: CharacterStatus;
     totalStatPointsEarned: bigint;
+    equippedAbilities: Array<Ability>;
+    class: string;
     name: string;
     season: bigint;
     level: bigint;
@@ -125,6 +133,8 @@ export interface CharacterCreationParams {
     int: bigint;
     str: bigint;
     vit: bigint;
+    equippedAbilities: Array<Ability>;
+    class: string;
     name: string;
     realm: Realm;
 }
@@ -153,6 +163,13 @@ export interface DungeonResult {
     newLevel: bigint;
     xpEarned: bigint;
     characterId: CharacterId;
+}
+export interface Ability {
+    element: string;
+    name: string;
+    type: string;
+    description: string;
+    power: bigint;
 }
 export interface BaseStats {
     dex: bigint;
@@ -216,6 +233,7 @@ export interface backendInterface {
         err: CharacterCreationError;
     }>;
     deleteCharacter(characterId: CharacterId): Promise<void>;
+    equipAbilities(characterId: CharacterId, abilities: Array<Ability>): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     /**
@@ -224,6 +242,7 @@ export interface backendInterface {
      */
     getCharacter(characterId: CharacterId): Promise<Character | null>;
     getCharacters(): Promise<Array<Character>>;
+    getEquippedAbilities(characterId: CharacterId): Promise<Array<Ability>>;
     getItem(itemId: string): Promise<Item | null>;
     getItemImage(itemId: string): Promise<ExternalBlob>;
     getMarketplaceListings(): Promise<Array<MarketplaceListing>>;
@@ -240,9 +259,10 @@ export interface backendInterface {
     }>;
     spendStatPoints(characterId: CharacterId, pointsSpent: bigint): Promise<void>;
     submitDungeonResult(result: DungeonResult): Promise<void>;
+    updateStats(characterId: CharacterId, statsUpdate: StatsUpdate): Promise<void>;
     uploadItemImage(itemId: string, externalBlob: ExternalBlob): Promise<void>;
 }
-import type { AdvancedStats as _AdvancedStats, BaseStats as _BaseStats, Character as _Character, CharacterCreationError as _CharacterCreationError, CharacterCreationParams as _CharacterCreationParams, CharacterId as _CharacterId, CharacterStatus as _CharacterStatus, ExternalBlob as _ExternalBlob, Item as _Item, ItemType as _ItemType, MarketplaceListing as _MarketplaceListing, Rarity as _Rarity, Realm as _Realm, SetHpError as _SetHpError, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
+import type { Ability as _Ability, AdvancedStats as _AdvancedStats, BaseStats as _BaseStats, Character as _Character, CharacterCreationError as _CharacterCreationError, CharacterCreationParams as _CharacterCreationParams, CharacterId as _CharacterId, CharacterStatus as _CharacterStatus, ExternalBlob as _ExternalBlob, Item as _Item, ItemType as _ItemType, MarketplaceListing as _MarketplaceListing, Rarity as _Rarity, Realm as _Realm, SetHpError as _SetHpError, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
@@ -405,6 +425,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async equipAbilities(arg0: CharacterId, arg1: Array<Ability>): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.equipAbilities(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.equipAbilities(arg0, arg1);
+            return result;
+        }
+    }
     async getCallerUserProfile(): Promise<UserProfile | null> {
         if (this.processError) {
             try {
@@ -459,6 +493,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getCharacters();
             return from_candid_vec_n27(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getEquippedAbilities(arg0: CharacterId): Promise<Array<Ability>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getEquippedAbilities(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getEquippedAbilities(arg0);
+            return result;
         }
     }
     async getItem(arg0: string): Promise<Item | null> {
@@ -607,6 +655,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async updateStats(arg0: CharacterId, arg1: StatsUpdate): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateStats(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateStats(arg0, arg1);
+            return result;
+        }
+    }
     async uploadItemImage(arg0: string, arg1: ExternalBlob): Promise<void> {
         if (this.processError) {
             try {
@@ -677,6 +739,8 @@ function from_candid_record_n22(_uploadFile: (file: ExternalBlob) => Promise<Uin
     xp: bigint;
     status: _CharacterStatus;
     totalStatPointsEarned: bigint;
+    equippedAbilities: Array<_Ability>;
+    class: string;
     name: string;
     season: bigint;
     level: bigint;
@@ -689,6 +753,8 @@ function from_candid_record_n22(_uploadFile: (file: ExternalBlob) => Promise<Uin
     xp: bigint;
     status: CharacterStatus;
     totalStatPointsEarned: bigint;
+    equippedAbilities: Array<Ability>;
+    class: string;
     name: string;
     season: bigint;
     level: bigint;
@@ -702,6 +768,8 @@ function from_candid_record_n22(_uploadFile: (file: ExternalBlob) => Promise<Uin
         xp: value.xp,
         status: from_candid_CharacterStatus_n23(_uploadFile, _downloadFile, value.status),
         totalStatPointsEarned: value.totalStatPointsEarned,
+        equippedAbilities: value.equippedAbilities,
+        class: value.class,
         name: value.name,
         season: value.season,
         level: value.level,
@@ -908,6 +976,8 @@ function to_candid_record_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     int: bigint;
     str: bigint;
     vit: bigint;
+    equippedAbilities: Array<Ability>;
+    class: string;
     name: string;
     realm: Realm;
 }): {
@@ -915,6 +985,8 @@ function to_candid_record_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     int: bigint;
     str: bigint;
     vit: bigint;
+    equippedAbilities: Array<_Ability>;
+    class: string;
     name: string;
     realm: _Realm;
 } {
@@ -923,6 +995,8 @@ function to_candid_record_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8
         int: value.int,
         str: value.str,
         vit: value.vit,
+        equippedAbilities: value.equippedAbilities,
+        class: value.class,
         name: value.name,
         realm: to_candid_Realm_n12(_uploadFile, _downloadFile, value.realm)
     };

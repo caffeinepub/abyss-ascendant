@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useActor } from './useActor';
-import {
+import type {
   Character,
-  CharacterCreationParams,
+  StatsUpdate,
   DungeonResult,
+  Ability,
+  CharacterId,
   UserProfile,
   MarketplaceListing,
-  CharacterCreationError,
-  SetHpError,
 } from '../backend';
 
 export class CharacterLimitReachedError extends Error {
@@ -30,16 +30,38 @@ export function useGetCharacters() {
   });
 }
 
+export function useGetCharacter(characterId: CharacterId | null) {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<Character | null>({
+    queryKey: ['character', characterId],
+    queryFn: async () => {
+      if (!actor || characterId === null) return null;
+      return actor.getCharacter(characterId);
+    },
+    enabled: !!actor && !isFetching && characterId !== null,
+  });
+}
+
 export function useCreateCharacter() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (params: CharacterCreationParams) => {
+    mutationFn: async (params: {
+      name: string;
+      class: string;
+      realm: import('../backend').Realm;
+      str: bigint;
+      dex: bigint;
+      int: bigint;
+      vit: bigint;
+      equippedAbilities: Ability[];
+    }) => {
       if (!actor) throw new Error('Actor not available');
       const result = await actor.createCharacter(params);
       if (result.__kind__ === 'err') {
-        if (result.err === CharacterCreationError.limitReached) {
+        if (result.err === 'limitReached') {
           throw new CharacterLimitReachedError();
         }
         throw new Error(`Failed to create character: ${result.err}`);
@@ -57,9 +79,68 @@ export function useDeleteCharacter() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (characterId: number) => {
+    mutationFn: async (characterId: CharacterId) => {
       if (!actor) throw new Error('Actor not available');
-      await actor.deleteCharacter(characterId);
+      return actor.deleteCharacter(characterId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+    },
+  });
+}
+
+export function useUpdateStats() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      characterId,
+      statsUpdate,
+    }: {
+      characterId: CharacterId;
+      statsUpdate: StatsUpdate;
+    }) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.updateStats(characterId, statsUpdate);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+      queryClient.invalidateQueries({ queryKey: ['character', variables.characterId] });
+    },
+  });
+}
+
+export function useSpendStatPoints() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      characterId,
+      pointsSpent,
+    }: {
+      characterId: CharacterId;
+      pointsSpent: bigint;
+    }) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.spendStatPoints(characterId, pointsSpent);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+      queryClient.invalidateQueries({ queryKey: ['character', variables.characterId] });
+    },
+  });
+}
+
+export function useSubmitDungeonResult() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (result: DungeonResult) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.submitDungeonResult(result);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['characters'] });
@@ -71,49 +152,38 @@ export function useSetCharacterHp() {
   const { actor } = useActor();
 
   return useMutation({
-    mutationFn: async ({ characterId, hp }: { characterId: number; hp: number }) => {
+    mutationFn: async ({
+      characterId,
+      hp,
+    }: {
+      characterId: CharacterId;
+      hp: bigint;
+    }) => {
       if (!actor) throw new Error('Actor not available');
-      const result = await actor.setCharacterHp(characterId, BigInt(Math.floor(hp)));
-      if (result.__kind__ === 'err') {
-        // Don't throw on alreadyFullHP - it's not a real error
-        if (result.err === SetHpError.alreadyFullHP) return;
-        throw new Error(`Failed to set HP: ${result.err}`);
-      }
+      return actor.setCharacterHp(characterId, hp);
     },
-    // Intentionally NOT invalidating 'characters' query here.
-    // HP syncs happen frequently (regen ticks) and invalidating the cache on every
-    // sync would cause useLocalCharacter to re-initialize from the backend, overwriting
-    // the live local HP state. The characters list is refreshed explicitly when needed
-    // (e.g., after navigating back to character select via refetchChars).
+    // Do NOT invalidate here to preserve live HP state during regen
   });
 }
 
-export function useSubmitDungeonResult() {
+export function useEquipAbilities() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (result: DungeonResult) => {
+    mutationFn: async ({
+      characterId,
+      abilities,
+    }: {
+      characterId: CharacterId;
+      abilities: Ability[];
+    }) => {
       if (!actor) throw new Error('Actor not available');
-      await actor.submitDungeonResult(result);
+      return actor.equipAbilities(characterId, abilities);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['characters'] });
-    },
-  });
-}
-
-export function useSpendStatPoints() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ characterId, pointsSpent }: { characterId: number; pointsSpent: number }) => {
-      if (!actor) throw new Error('Actor not available');
-      await actor.spendStatPoints(characterId, BigInt(pointsSpent));
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['characters'] });
+      queryClient.invalidateQueries({ queryKey: ['character', variables.characterId] });
     },
   });
 }
@@ -145,7 +215,7 @@ export function useSaveCallerUserProfile() {
   return useMutation({
     mutationFn: async (profile: UserProfile) => {
       if (!actor) throw new Error('Actor not available');
-      await actor.saveCallerUserProfile(profile);
+      return actor.saveCallerUserProfile(profile);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] });
@@ -173,7 +243,7 @@ export function useListItemForSale() {
   return useMutation({
     mutationFn: async ({ itemId, price }: { itemId: string; price: bigint }) => {
       if (!actor) throw new Error('Actor not available');
-      await actor.listItemForSale(itemId, price);
+      return actor.listItemForSale(itemId, price);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplaceListings'] });
@@ -188,7 +258,7 @@ export function useBuyItem() {
   return useMutation({
     mutationFn: async (itemId: string) => {
       if (!actor) throw new Error('Actor not available');
-      await actor.buyItem(itemId);
+      return actor.buyItem(itemId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplaceListings'] });

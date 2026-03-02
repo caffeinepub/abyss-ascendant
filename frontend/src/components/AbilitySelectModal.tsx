@@ -1,131 +1,121 @@
 import React, { useState } from 'react';
+import { X, Zap, ChevronRight } from 'lucide-react';
+import { LocalCharacter, calculateAvailableAbilityPoints } from '../types/game';
 import { ABILITIES, Ability } from '../data/abilities';
-import { LocalCharacter } from '../types/game';
 
 interface AbilitySelectModalProps {
   character: LocalCharacter;
-  onConfirm: (abilities: string[]) => void;
   onClose: () => void;
+  onConfirm: (selectedAbilities: string[]) => void;
 }
 
-const ARCHETYPE_LABELS: Record<string, string> = {
-  melee: '⚔️ Melee',
-  ranged: '🏹 Ranged',
-  magic: '✨ Magic',
-  tank: '🛡️ Tank',
-  Warrior: '⚔️ Warrior',
-  Mage: '✨ Mage',
-  Rogue: '🗡️ Rogue',
-  Universal: '🌟 Universal',
-};
+const MAX_EQUIPPED = 3;
 
-const ARCHETYPE_COLORS: Record<string, string> = {
-  melee: 'text-red-400 border-red-400/30 bg-red-400/5',
-  ranged: 'text-green-400 border-green-400/30 bg-green-400/5',
-  magic: 'text-blue-400 border-blue-400/30 bg-blue-400/5',
-  tank: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5',
-  Warrior: 'text-red-400 border-red-400/30 bg-red-400/5',
-  Mage: 'text-blue-400 border-blue-400/30 bg-blue-400/5',
-  Rogue: 'text-purple-400 border-purple-400/30 bg-purple-400/5',
-  Universal: 'text-amber-400 border-amber-400/30 bg-amber-400/5',
-};
+export default function AbilitySelectModal({ character, onClose, onConfirm }: AbilitySelectModalProps) {
+  // Filter class abilities for this character
+  const classAbilities = ABILITIES.filter(
+    (a) => !a.classRestriction || a.classRestriction === character.class
+  );
 
-export default function AbilitySelectModal({
-  character,
-  onConfirm,
-  onClose,
-}: AbilitySelectModalProps) {
-  const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
-  // Start with the character's current abilities as the working set
-  const [selectedAbilities, setSelectedAbilities] = useState<string[]>(character.abilities || []);
+  // Initialize selectedAbilities only from abilities that are valid for this character's class
+  // This prevents stale cross-class abilities from consuming ability points
+  const validEquipped = character.equippedAbilities.filter((name) =>
+    classAbilities.some((a) => a.name === name)
+  );
 
-  const totalAbilityPoints = character.abilityPoints;
+  const [selectedAbilities, setSelectedAbilities] = useState<string[]>(
+    validEquipped.slice(0, MAX_EQUIPPED)
+  );
+
+  const totalAbilityPoints = Math.min(calculateAvailableAbilityPoints(character.level), MAX_EQUIPPED);
   const usedPoints = selectedAbilities.length;
   const availablePoints = totalAbilityPoints - usedPoints;
 
-  const filteredAbilities = selectedArchetype
-    ? ABILITIES.filter((a) => a.archetype === selectedArchetype)
-    : ABILITIES;
+  const handleToggleAbility = (abilityName: string) => {
+    const isSelected = selectedAbilities.includes(abilityName);
 
-  function handleToggleAbility(ability: Ability) {
-    const isSelected = selectedAbilities.includes(ability.id);
     if (isSelected) {
-      setSelectedAbilities(prev => prev.filter(id => id !== ability.id));
+      // Deselect
+      setSelectedAbilities((prev) => prev.filter((a) => a !== abilityName));
     } else {
-      if (availablePoints <= 0) return;
-      setSelectedAbilities(prev => [...prev, ability.id]);
+      // Select: if at cap, replace the last slot
+      if (availablePoints <= 0) {
+        setSelectedAbilities((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = abilityName;
+          return updated;
+        });
+      } else {
+        setSelectedAbilities((prev) => [...prev, abilityName]);
+      }
     }
-  }
+  };
 
-  function handleConfirm() {
+  const handleConfirm = () => {
     onConfirm(selectedAbilities);
-  }
+  };
 
-  const archetypes = [...new Set(ABILITIES.map((a) => a.archetype))];
+  const getAbilityByName = (name: string): Ability | undefined =>
+    ABILITIES.find((a) => a.name === name);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div className="bg-surface-1 border border-border rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="bg-surface-1 border border-border rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-border">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
-            <h2 className="text-xl font-bold text-foreground font-display">Ability Selection</h2>
-            <p className="text-sm text-muted mt-0.5">
-              Select up to {totalAbilityPoints} abilities for your character.
+            <h2 className="text-xl font-display font-bold text-foreground">Ability Selection</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Choose abilities for {character.name} ({character.class})
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-muted hover:text-foreground transition-colors text-2xl leading-none"
+            className="text-muted-foreground hover:text-foreground transition-colors p-1"
           >
-            ×
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Ability Points */}
-        <div className="p-4 border-b border-border bg-surface-2/50">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-foreground uppercase tracking-wider">
-              Ability Slots
-            </span>
-            <span
-              className={`text-sm font-bold px-3 py-1 rounded-full ${
-                availablePoints > 0
-                  ? 'bg-primary/20 text-primary animate-pulse'
-                  : 'bg-surface-2 text-muted'
-              }`}
-            >
-              {usedPoints} / {totalAbilityPoints} used
+        {/* Points info */}
+        <div className="px-4 py-3 bg-surface-2 border-b border-border flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-accent" />
+            <span className="text-sm text-foreground">
+              <span className="font-bold text-accent">{availablePoints}</span> ability point{availablePoints !== 1 ? 's' : ''} available
             </span>
           </div>
+          <div className="text-sm text-muted-foreground">
+            {usedPoints} / {totalAbilityPoints} slots used
+          </div>
+          <div className="text-xs text-muted-foreground ml-auto">
+            12.5% trigger chance per round
+          </div>
+        </div>
 
-          {/* Selected abilities preview */}
-          <div className="grid grid-cols-3 gap-2">
-            {Array.from({ length: totalAbilityPoints }).map((_, slotIdx) => {
-              const abilityId = selectedAbilities[slotIdx];
-              const ability = abilityId ? ABILITIES.find(a => a.id === abilityId) : null;
+        {/* Equipped slots preview */}
+        <div className="px-4 py-3 border-b border-border">
+          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">Equipped Abilities</p>
+          <div className="flex gap-2">
+            {Array.from({ length: MAX_EQUIPPED }).map((_, i) => {
+              const abilityName = selectedAbilities[i];
+              const ability = abilityName ? getAbilityByName(abilityName) : undefined;
               return (
                 <div
-                  key={slotIdx}
-                  className={`rounded-lg border p-2 text-center text-xs ${
+                  key={i}
+                  className={`flex-1 rounded border p-2 min-h-[48px] flex items-center gap-2 transition-colors ${
                     ability
-                      ? 'border-primary/40 bg-primary/5'
-                      : 'border-dashed border-border/50 bg-surface-2/50'
+                      ? 'border-accent/50 bg-accent/10'
+                      : 'border-border/50 bg-surface-2 border-dashed'
                   }`}
                 >
                   {ability ? (
                     <>
-                      <div className="text-xl">{ability.icon}</div>
-                      <div className="font-medium text-foreground mt-0.5 truncate">{ability.name}</div>
-                      <button
-                        onClick={() => handleToggleAbility(ability)}
-                        className="text-xs text-red-400 hover:text-red-300 mt-1"
-                      >
-                        Remove
-                      </button>
+                      <span className="text-accent text-lg">{ability.icon}</span>
+                      <span className="text-xs text-foreground font-medium truncate">{ability.name}</span>
                     </>
                   ) : (
-                    <div className="text-muted py-2">Slot {slotIdx + 1} — Empty</div>
+                    <span className="text-xs text-muted-foreground/50 mx-auto">Empty</span>
                   )}
                 </div>
               );
@@ -133,90 +123,91 @@ export default function AbilitySelectModal({
           </div>
         </div>
 
-        {/* Archetype Filter */}
-        <div className="px-4 pt-3 pb-2 flex gap-2 flex-wrap border-b border-border">
-          <button
-            onClick={() => setSelectedArchetype(null)}
-            className={`text-xs px-3 py-1 rounded-full border transition-all ${
-              selectedArchetype === null
-                ? 'bg-primary/20 text-primary border-primary/40'
-                : 'border-border text-muted hover:text-foreground'
-            }`}
-          >
-            All
-          </button>
-          {archetypes.map((arch) => (
-            <button
-              key={arch}
-              onClick={() => setSelectedArchetype(arch === selectedArchetype ? null : arch)}
-              className={`text-xs px-3 py-1 rounded-full border transition-all ${
-                selectedArchetype === arch
-                  ? `${ARCHETYPE_COLORS[arch] || 'bg-primary/20 text-primary border-primary/40'}`
-                  : 'border-border text-muted hover:text-foreground'
-              }`}
-            >
-              {ARCHETYPE_LABELS[arch] || arch}
-            </button>
-          ))}
-        </div>
-
-        {/* Ability List */}
+        {/* Ability list */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {filteredAbilities.map((ability) => {
-            const isSelected = selectedAbilities.includes(ability.id);
-            const canSelect = availablePoints > 0 || isSelected;
+          {classAbilities.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No abilities available for this class.</p>
+          ) : (
+            classAbilities.map((ability) => {
+              const isSelected = selectedAbilities.includes(ability.name);
+              // An ability is interactable if: it's already selected (can deselect), OR there are available points
+              const canInteract = isSelected || availablePoints > 0;
 
-            return (
-              <div
-                key={ability.id}
-                onClick={() => handleToggleAbility(ability)}
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                  isSelected
-                    ? 'border-primary/50 bg-primary/10'
-                    : canSelect
-                    ? 'border-border hover:border-primary/30 hover:bg-surface-2'
-                    : 'border-border opacity-50 cursor-not-allowed'
-                }`}
-              >
-                <span className="text-2xl">{ability.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm text-foreground">{ability.name}</span>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full border ${
-                        ARCHETYPE_COLORS[ability.archetype] || 'text-muted border-border'
+              return (
+                <button
+                  key={ability.name}
+                  onClick={() => handleToggleAbility(ability.name)}
+                  disabled={!canInteract}
+                  className={`w-full text-left rounded-lg border p-3 transition-all ${
+                    isSelected
+                      ? 'border-accent bg-accent/15 shadow-sm shadow-accent/20'
+                      : canInteract
+                      ? 'border-border hover:border-accent/50 hover:bg-surface-2 cursor-pointer'
+                      : 'border-border/30 bg-surface-2/50 opacity-40 cursor-not-allowed'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`mt-0.5 p-1.5 rounded text-lg ${
+                        isSelected ? 'bg-accent/20' : 'bg-surface-2'
                       }`}
                     >
-                      {ARCHETYPE_LABELS[ability.archetype] || ability.archetype}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted mt-0.5">{ability.description}</p>
-                  <div className="flex gap-3 mt-1 text-xs text-muted">
-                    <span>⏱ CD: {ability.cooldown}t</span>
-                    {ability.damageMultiplier && (
-                      <span>⚔ {ability.damageMultiplier}x dmg</span>
+                      {ability.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`font-semibold text-sm ${
+                            isSelected ? 'text-accent' : 'text-foreground'
+                          }`}
+                        >
+                          {ability.name}
+                        </span>
+                        {isSelected && (
+                          <span className="text-xs bg-accent/20 text-accent px-1.5 py-0.5 rounded-full">
+                            Equipped
+                          </span>
+                        )}
+                        <span className="ml-auto text-xs text-muted-foreground capitalize">
+                          {ability.damageType} · {ability.effectType}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        {ability.description}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <span className="text-xs text-orange-400">
+                          {(ability.damageMultiplier * 100).toFixed(0)}% damage
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Scales: {ability.scalingStat.toUpperCase()}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          CD: {ability.cooldown}s
+                        </span>
+                      </div>
+                    </div>
+                    {canInteract && !isSelected && (
+                      <ChevronRight className="w-4 h-4 text-muted-foreground/50 mt-1 flex-shrink-0" />
                     )}
                   </div>
-                </div>
-                {isSelected && (
-                  <span className="text-primary text-xs font-bold shrink-0">✓ Selected</span>
-                )}
-              </div>
-            );
-          })}
+                </button>
+              );
+            })
+          )}
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-border flex justify-end gap-2">
+        <div className="p-4 border-t border-border flex gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-surface-2 text-muted hover:text-foreground text-sm font-medium transition-all"
+            className="flex-1 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors text-sm"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-all"
+            className="flex-1 py-2 rounded bg-accent text-accent-foreground hover:bg-accent/90 transition-colors text-sm font-semibold"
           >
             Confirm Selection
           </button>

@@ -11,11 +11,12 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 import MixinStorage "blob-storage/Mixin";
 
+
+
 actor {
   let maxStats = 100;
   let maxLevel = 50;
   let baseStat = 1;
-
   var nextCharacterId : Nat8 = 0;
   var currentSeason = 1;
 
@@ -60,8 +61,17 @@ actor {
     critPower : Nat;
   };
 
+  public type Ability = {
+    name : Text;
+    description : Text;
+    type_ : Text;
+    element : Text;
+    power : Nat;
+  };
+
   public type Character = {
     name : Text;
+    class_ : Text;
     realm : Realm;
     classTier : Nat;
     level : Nat;
@@ -72,6 +82,7 @@ actor {
     advancedStats : AdvancedStats;
     totalStatPointsEarned : Nat;
     totalStatPointsSpent : Nat;
+    equippedAbilities : [Ability];
   };
 
   public type ItemType = { #Weapon; #Armor; #Trinket };
@@ -101,11 +112,20 @@ actor {
 
   public type CharacterCreationParams = {
     name : Text;
+    class_ : Text;
     realm : Realm;
     str : Nat;
     dex : Nat;
     int : Nat;
     vit : Nat;
+    equippedAbilities : [Ability];
+  };
+
+  public type StatsUpdate = {
+    strIncrease : Nat;
+    dexIncrease : Nat;
+    intIncrease : Nat;
+    vitIncrease : Nat;
   };
 
   public type CharacterCreationError = { #alreadyExists; #noPermission; #limitReached };
@@ -218,6 +238,46 @@ actor {
     };
   };
 
+  public shared ({ caller }) func updateStats(characterId : CharacterId, statsUpdate : StatsUpdate) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can update stats");
+    };
+
+    func increaseStat(current : Nat, increase : Nat) : Nat {
+      if (increase > 0) { current + increase } else { current };
+    };
+
+    switch (characters.get(caller)) {
+      case (null) { Runtime.trap("Character not found for caller") };
+      case (?characterSlots) {
+        let maybeCharacter = characterSlots.toArray().find(func(slot) { slot.id == characterId });
+        switch (maybeCharacter) {
+          case (null) { Runtime.trap("Character ID not found for caller") };
+          case (?_) {
+            let updatedCharacterSlots = characterSlots.map<CharacterSlot, CharacterSlot>(
+              func(slot) {
+                if (slot.id == characterId) {
+                  let updatedCharacter : Character = {
+                    slot.character with baseStats = {
+                      slot.character.baseStats with str = increaseStat(slot.character.baseStats.str, statsUpdate.strIncrease);
+                      dex = increaseStat(slot.character.baseStats.dex, statsUpdate.dexIncrease);
+                      int = increaseStat(slot.character.baseStats.int, statsUpdate.intIncrease);
+                      vit = increaseStat(slot.character.baseStats.vit, statsUpdate.vitIncrease);
+                    };
+                  };
+                  { slot with character = updatedCharacter };
+                } else {
+                  slot;
+                };
+              }
+            );
+            characters.add(caller, updatedCharacterSlots);
+          };
+        };
+      };
+    };
+  };
+
   public shared ({ caller }) func createCharacter(params : CharacterCreationParams) : async {
     #ok : CharacterId;
     #err : CharacterCreationError;
@@ -237,6 +297,7 @@ actor {
 
     let newCharacter : Character = {
       name = params.name;
+      class_ = params.class_;
       realm = params.realm;
       classTier = 1;
       level = 1;
@@ -257,10 +318,12 @@ actor {
       };
       totalStatPointsEarned = 0;
       totalStatPointsSpent = 0;
+      equippedAbilities = params.equippedAbilities;
     };
 
     let newId = getNextCharacterId();
     let newSlot : CharacterSlot = { id = newId; character = newCharacter };
+
     switch (characters.get(caller)) {
       case (null) {
         characters.add(caller, List.fromArray<CharacterSlot>([newSlot]));
@@ -433,4 +496,57 @@ actor {
       };
     };
   };
+
+  public shared ({ caller }) func equipAbilities(characterId : CharacterId, abilities : [Ability]) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can equip abilities");
+    };
+
+    switch (characters.get(caller)) {
+      case (null) { Runtime.trap("Character not found for caller") };
+      case (?characterSlots) {
+        let maybeCharacter = characterSlots.toArray().find(
+          func(slot) { slot.id == characterId }
+        );
+        switch (maybeCharacter) {
+          case (null) { Runtime.trap("Character ID not found for caller") };
+          case (?_) {
+            let updatedCharacterSlots = characterSlots.map<CharacterSlot, CharacterSlot>(
+              func(slot) {
+                if (slot.id == characterId) {
+                  let updatedCharacter : Character = {
+                    slot.character with equippedAbilities = abilities;
+                  };
+                  { slot with character = updatedCharacter };
+                } else {
+                  slot;
+                };
+              }
+            );
+            characters.add(caller, updatedCharacterSlots);
+          };
+        };
+      };
+    };
+  };
+
+  public query ({ caller }) func getEquippedAbilities(characterId : CharacterId) : async [Ability] {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can view equipped abilities");
+    };
+
+    switch (characters.get(caller)) {
+      case (null) { Runtime.trap("Character not found for caller") };
+      case (?characterSlots) {
+        let maybeCharacter = characterSlots.toArray().find(
+          func(slot) { slot.id == characterId }
+        );
+        switch (maybeCharacter) {
+          case (null) { [] };
+          case (?slot) { slot.character.equippedAbilities };
+        };
+      };
+    };
+  };
 };
+

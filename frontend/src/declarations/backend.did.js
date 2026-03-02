@@ -24,6 +24,13 @@ export const UserRole = IDL.Variant({
   'user' : IDL.Null,
   'guest' : IDL.Null,
 });
+export const Ability = IDL.Record({
+  'element' : IDL.Text,
+  'name' : IDL.Text,
+  'type' : IDL.Text,
+  'description' : IDL.Text,
+  'power' : IDL.Nat,
+});
 export const Realm = IDL.Variant({
   'Hardcore' : IDL.Null,
   'Softcore' : IDL.Null,
@@ -33,6 +40,8 @@ export const CharacterCreationParams = IDL.Record({
   'int' : IDL.Nat,
   'str' : IDL.Nat,
   'vit' : IDL.Nat,
+  'equippedAbilities' : IDL.Vec(Ability),
+  'class' : IDL.Text,
   'name' : IDL.Text,
   'realm' : Realm,
 });
@@ -63,6 +72,8 @@ export const Character = IDL.Record({
   'xp' : IDL.Nat,
   'status' : CharacterStatus,
   'totalStatPointsEarned' : IDL.Nat,
+  'equippedAbilities' : IDL.Vec(Ability),
+  'class' : IDL.Text,
   'name' : IDL.Text,
   'season' : IDL.Nat,
   'level' : IDL.Nat,
@@ -116,6 +127,12 @@ export const DungeonResult = IDL.Record({
   'xpEarned' : IDL.Nat,
   'characterId' : CharacterId,
 });
+export const StatsUpdate = IDL.Record({
+  'vitIncrease' : IDL.Nat,
+  'strIncrease' : IDL.Nat,
+  'intIncrease' : IDL.Nat,
+  'dexIncrease' : IDL.Nat,
+});
 
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -153,10 +170,16 @@ export const idlService = IDL.Service({
       [],
     ),
   'deleteCharacter' : IDL.Func([CharacterId], [], []),
+  'equipAbilities' : IDL.Func([CharacterId, IDL.Vec(Ability)], [], []),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCharacter' : IDL.Func([CharacterId], [IDL.Opt(Character)], ['query']),
   'getCharacters' : IDL.Func([], [IDL.Vec(Character)], ['query']),
+  'getEquippedAbilities' : IDL.Func(
+      [CharacterId],
+      [IDL.Vec(Ability)],
+      ['query'],
+    ),
   'getItem' : IDL.Func([IDL.Text], [IDL.Opt(Item)], ['query']),
   'getItemImage' : IDL.Func([IDL.Text], [ExternalBlob], ['query']),
   'getMarketplaceListings' : IDL.Func(
@@ -179,6 +202,7 @@ export const idlService = IDL.Service({
     ),
   'spendStatPoints' : IDL.Func([CharacterId, IDL.Nat], [], []),
   'submitDungeonResult' : IDL.Func([DungeonResult], [], []),
+  'updateStats' : IDL.Func([CharacterId, StatsUpdate], [], []),
   'uploadItemImage' : IDL.Func([IDL.Text, ExternalBlob], [], []),
 });
 
@@ -201,12 +225,21 @@ export const idlFactory = ({ IDL }) => {
     'user' : IDL.Null,
     'guest' : IDL.Null,
   });
+  const Ability = IDL.Record({
+    'element' : IDL.Text,
+    'name' : IDL.Text,
+    'type' : IDL.Text,
+    'description' : IDL.Text,
+    'power' : IDL.Nat,
+  });
   const Realm = IDL.Variant({ 'Hardcore' : IDL.Null, 'Softcore' : IDL.Null });
   const CharacterCreationParams = IDL.Record({
     'dex' : IDL.Nat,
     'int' : IDL.Nat,
     'str' : IDL.Nat,
     'vit' : IDL.Nat,
+    'equippedAbilities' : IDL.Vec(Ability),
+    'class' : IDL.Text,
     'name' : IDL.Text,
     'realm' : Realm,
   });
@@ -237,6 +270,8 @@ export const idlFactory = ({ IDL }) => {
     'xp' : IDL.Nat,
     'status' : CharacterStatus,
     'totalStatPointsEarned' : IDL.Nat,
+    'equippedAbilities' : IDL.Vec(Ability),
+    'class' : IDL.Text,
     'name' : IDL.Text,
     'season' : IDL.Nat,
     'level' : IDL.Nat,
@@ -290,6 +325,12 @@ export const idlFactory = ({ IDL }) => {
     'xpEarned' : IDL.Nat,
     'characterId' : CharacterId,
   });
+  const StatsUpdate = IDL.Record({
+    'vitIncrease' : IDL.Nat,
+    'strIncrease' : IDL.Nat,
+    'intIncrease' : IDL.Nat,
+    'dexIncrease' : IDL.Nat,
+  });
   
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -327,10 +368,16 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'deleteCharacter' : IDL.Func([CharacterId], [], []),
+    'equipAbilities' : IDL.Func([CharacterId, IDL.Vec(Ability)], [], []),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCharacter' : IDL.Func([CharacterId], [IDL.Opt(Character)], ['query']),
     'getCharacters' : IDL.Func([], [IDL.Vec(Character)], ['query']),
+    'getEquippedAbilities' : IDL.Func(
+        [CharacterId],
+        [IDL.Vec(Ability)],
+        ['query'],
+      ),
     'getItem' : IDL.Func([IDL.Text], [IDL.Opt(Item)], ['query']),
     'getItemImage' : IDL.Func([IDL.Text], [ExternalBlob], ['query']),
     'getMarketplaceListings' : IDL.Func(
@@ -353,6 +400,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'spendStatPoints' : IDL.Func([CharacterId, IDL.Nat], [], []),
     'submitDungeonResult' : IDL.Func([DungeonResult], [], []),
+    'updateStats' : IDL.Func([CharacterId, StatsUpdate], [], []),
     'uploadItemImage' : IDL.Func([IDL.Text, ExternalBlob], [], []),
   });
 };

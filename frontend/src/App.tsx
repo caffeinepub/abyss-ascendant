@@ -5,6 +5,7 @@ import {
   useGetCharacters,
   useSetCharacterHp,
   useSpendStatPoints,
+  useUpdateStats,
   useGetCallerUserProfile,
   useSaveCallerUserProfile,
 } from './hooks/useQueries';
@@ -31,12 +32,6 @@ import LevelUpModal from './components/LevelUpModal';
 
 const queryClient = new QueryClient();
 
-// CharacterWithId wraps a backend Character with its array index as a local ID
-interface CharacterWithId {
-  id: number;
-  character: Character;
-}
-
 function AppContent() {
   const { identity, isInitializing } = useInternetIdentity();
   const isAuthenticated = !!identity;
@@ -56,15 +51,10 @@ function AppContent() {
   const { data: rawCharacters = [], isLoading: charsLoading, isError: charsError, refetch: refetchChars } = useGetCharacters();
   const setCharacterHpMutation = useSetCharacterHp();
   const spendStatPointsMutation = useSpendStatPoints();
+  const updateStatsMutation = useUpdateStats();
 
   const { data: userProfile, isLoading: profileLoading, isFetched: profileFetched } = useGetCallerUserProfile();
   const saveProfile = useSaveCallerUserProfile();
-
-  // Build CharacterWithId list using array index as ID
-  const characters: CharacterWithId[] = rawCharacters.map((character, index) => ({
-    id: index,
-    character,
-  }));
 
   // Find the selected backend character by index
   const selectedBackendChar: Character | null =
@@ -84,7 +74,7 @@ function AppContent() {
   // Health regen - sync to backend periodically (silent, no query invalidation)
   const handleBackendHpSync = useCallback((newHp: number) => {
     if (selectedCharacterIndex === null || !character) return;
-    setCharacterHpMutation.mutate({ characterId: selectedCharacterIndex, hp: newHp });
+    setCharacterHpMutation.mutate({ characterId: selectedCharacterIndex, hp: BigInt(Math.floor(newHp)) });
   }, [selectedCharacterIndex, character, setCharacterHpMutation]);
 
   useHealthRegen({
@@ -98,7 +88,10 @@ function AppContent() {
   // Show level up modal when character has unspent stat points after dungeon
   useEffect(() => {
     if (character && !isInDungeon && pendingLevelUp) {
-      const unspent = calculateUnspentStatPoints(character.totalStatPointsEarned, character.totalStatPointsSpent);
+      const unspent = calculateUnspentStatPoints(
+        character.totalStatPointsEarned,
+        character.totalStatPointsSpent
+      );
       if (unspent > 0) {
         setShowLevelUpModal(true);
         setPendingLevelUp(false);
@@ -113,7 +106,6 @@ function AppContent() {
   }, []);
 
   const handleBackToCharacterSelect = useCallback(async () => {
-    // Capture current values immediately to avoid stale closures
     const charIdToSave = selectedCharacterIndex;
     const charToSave = character;
 
@@ -121,16 +113,17 @@ function AppContent() {
       const hpToSave = Math.min(charToSave.stats.currentHp, charToSave.stats.maxHp);
       setIsSavingHp(true);
       try {
-        // Await the HP save so the backend has the correct value before we navigate away
-        await setCharacterHpMutation.mutateAsync({ characterId: charIdToSave, hp: hpToSave });
+        await setCharacterHpMutation.mutateAsync({
+          characterId: charIdToSave,
+          hp: BigInt(Math.floor(hpToSave)),
+        });
       } catch {
-        // Even if save fails, still navigate back — don't block the user
+        // Even if save fails, still navigate back
       } finally {
         setIsSavingHp(false);
       }
     }
 
-    // Navigate away only after the save has completed (or failed)
     setSelectedCharacterIndex(null);
     setCurrentScreen('character');
     setIsInDungeon(false);
@@ -156,20 +149,19 @@ function AppContent() {
     setIsInDungeon(false);
     setPendingMonsters([]);
 
-    // Update local character state with post-combat values
     updateAfterDungeon(newXp, newLevel, remainingHp);
 
-    // Persist post-combat HP to backend
     if (selectedCharacterIndex !== null) {
-      setCharacterHpMutation.mutate({ characterId: selectedCharacterIndex, hp: remainingHp });
+      setCharacterHpMutation.mutate({
+        characterId: selectedCharacterIndex,
+        hp: BigInt(Math.floor(remainingHp)),
+      });
     }
 
-    // Add loot to pending
     if (result.loot.length > 0) {
       setPendingLoot(prev => [...prev, ...result.loot]);
     }
 
-    // Check if leveled up - trigger level up modal
     if (character && newLevel > character.level) {
       setPendingLevelUp(true);
     }
@@ -239,7 +231,6 @@ function AppContent() {
     return <LoginScreen />;
   }
 
-  // Profile setup modal
   if (showProfileSetup) {
     return (
       <div className="min-h-screen bg-surface-1 flex items-center justify-center p-4">
@@ -275,9 +266,13 @@ function AppContent() {
         <div className="min-h-screen bg-surface-1">
           <CharacterCreation
             existingCharacters={rawCharacters}
-            onCharacterCreated={(id) => {
+            onCharacterCreated={(characterId) => {
               refetchChars();
               setShowCharacterCreation(false);
+              // Select the newly created character by index
+              if (typeof characterId === 'number') {
+                handleSelectCharacter(characterId);
+              }
             }}
             onCancel={() => setShowCharacterCreation(false)}
           />
@@ -286,14 +281,63 @@ function AppContent() {
       );
     }
 
+    // Build LocalCharacter-like list for CharacterSelectScreen
+    // We pass index as id so onSelectCharacter receives the index
+    const characterSelectList: LocalCharacter[] = rawCharacters.map((backendChar, index) => {
+      const level = Number(backendChar.level);
+      const vit = Number(backendChar.baseStats.vit);
+      const str = Number(backendChar.baseStats.str);
+      const dex = Number(backendChar.baseStats.dex);
+      const int_ = Number(backendChar.baseStats.int);
+      const maxHp = Math.max(10, vit * 10 + 50);
+      const currentHp = Math.min(Number(backendChar.advancedStats.currentHP), maxHp);
+      const totalEarned = Number(backendChar.totalStatPointsEarned);
+      const totalSpent = Number(backendChar.totalStatPointsSpent);
+      const classStr = backendChar.class;
+      const characterClass =
+        classStr === 'Warrior' || classStr === 'Rogue' || classStr === 'Mage'
+          ? (classStr as import('./types/game').CharacterClass)
+          : ('Warrior' as import('./types/game').CharacterClass);
+
+      return {
+        id: index,
+        name: backendChar.name,
+        class: characterClass,
+        realm: backendChar.realm === 'Hardcore' ? 'Hardcore' : 'Softcore',
+        level,
+        xp: Number(backendChar.xp),
+        status: backendChar.status === 'Dead' ? 'Dead' : 'Alive',
+        baseStats: { str, dex, int: int_, vit },
+        stats: {
+          str,
+          dex,
+          int: int_,
+          vit,
+          maxHp,
+          currentHp,
+          critChance: Number(backendChar.advancedStats.critChance) || 5,
+          critPower: Number(backendChar.advancedStats.critPower) || 50,
+        },
+        totalStatPointsEarned: totalEarned,
+        totalStatPointsSpent: totalSpent,
+        pendingStatPoints: Math.max(0, totalEarned - totalSpent),
+        abilityPoints: 1,
+        equippedAbilities: backendChar.equippedAbilities?.map(a => a.name) || [],
+        abilities: [],
+        equippedItems: [],
+        inventory: [],
+        stash: [],
+      } as LocalCharacter;
+    });
+
     return (
       <div className="min-h-screen bg-surface-1">
         <CharacterSelectScreen
-          characters={characters}
+          characters={characterSelectList}
           isLoading={charsLoading}
           isError={charsError}
           onRetry={refetchChars}
-          onSelectCharacter={handleSelectCharacter}
+          onSelectCharacter={(localChar) => handleSelectCharacter(localChar.id)}
           onCreateCharacter={() => setShowCharacterCreation(true)}
         />
         <AppFooter />
@@ -319,6 +363,10 @@ function AppContent() {
   }
 
   // Main game screens
+  const unspentPoints = character
+    ? calculateUnspentStatPoints(character.totalStatPointsEarned, character.totalStatPointsSpent)
+    : 0;
+
   return (
     <div className="min-h-screen bg-surface-1 flex flex-col">
       <Navigation
@@ -338,7 +386,7 @@ function AppContent() {
           <CharacterSheet
             character={character}
             onUpdateBaseStats={handleUpdateBaseStats}
-            onUpdateAbilities={handleUpdateAbilities}
+            onUpdateEquippedAbilities={handleUpdateAbilities}
           />
         )}
         {currentScreen === 'dungeon-select' && character && (
@@ -384,17 +432,40 @@ function AppContent() {
         {currentScreen === 'shrines' && <ShrinesPlaceholder />}
       </main>
 
-      {/* Level Up Modal */}
-      {showLevelUpModal && character && calculateUnspentStatPoints(character.totalStatPointsEarned, character.totalStatPointsSpent) > 0 && (
+      {/* Level Up Modal — triggered after dungeon completion */}
+      {showLevelUpModal && character && unspentPoints > 0 && (
         <LevelUpModal
           character={character}
-          onConfirm={async (newBaseStats, newTotalSpent) => {
+          newLevel={character.level}
+          statPointsToSpend={unspentPoints}
+          onConfirm={async (statsUpdate) => {
             try {
-              await spendStatPointsMutation.mutateAsync({
-                characterId: selectedCharacterIndex,
-                pointsSpent: newTotalSpent,
+              // 1. Increment stats on the backend
+              await updateStatsMutation.mutateAsync({
+                characterId: selectedCharacterIndex!,
+                statsUpdate: {
+                  strIncrease: BigInt(statsUpdate.strIncrease),
+                  dexIncrease: BigInt(statsUpdate.dexIncrease),
+                  intIncrease: BigInt(statsUpdate.intIncrease),
+                  vitIncrease: BigInt(statsUpdate.vitIncrease),
+                },
               });
-              handleUpdateBaseStats(newBaseStats, newTotalSpent);
+              // 2. Record total spent count on the backend
+              await spendStatPointsMutation.mutateAsync({
+                characterId: selectedCharacterIndex!,
+                pointsSpent: BigInt(statsUpdate.newTotalSpent),
+              });
+              // 3. Update local state immediately
+              if (character) {
+                const newBaseStats: BaseStats = {
+                  str: character.baseStats.str + statsUpdate.strIncrease,
+                  dex: character.baseStats.dex + statsUpdate.dexIncrease,
+                  int: character.baseStats.int + statsUpdate.intIncrease,
+                  vit: character.baseStats.vit + statsUpdate.vitIncrease,
+                };
+                updateBaseStats(newBaseStats, statsUpdate.newTotalSpent);
+              }
+              setShowLevelUpModal(false);
             } catch (err) {
               console.error('Failed to save stat points:', err);
             }

@@ -1,23 +1,59 @@
 {
   "schemaVersion": "1.0.0",
   "projectStateVersion": 3,
-  "summary": "A game project (RPG/combat) where the user is rebalancing combat. Enemy/monster defense is being reduced by 80% due to combat feeling unbalanced (9 strength hitting level 1 enemies for only 1 damage).",
+  "summary": "RPG game with character progression, stat investment, abilities, and class-based characters. Multiple bug fixes in progress.",
   "architectural_notes": [],
   "known_issues": [
-    "Combat balance issue: player with 9 strength hitting level 1 enemies for only 1 damage — monster defense being reduced by 80% to fix."
+    "Stat points spent during level-up not reflected in Character tab stats",
+    "Ability selection disabled (grayed out) at level 1 even when ability points are available"
   ],
   "isFixRequest": true,
   "existing_features": [
     {
-      "id": "feature-in-the-combat-engine-reduce-all-monster-defense-armor-values-by-80-this-applies-to-base-monster-stat-blocks-and-any-defense-contributions-from-monster-prefixes-suffixes-a-player-with-9-strength-should-deal-meaningful-damage-significantly-more-than-1-to-level-1-enemies-after-this-change",
-      "title": "In the combat engine, reduce all monster defense/armor values by 80%. This applies to base monster stat blocks and any defense contributions from monster prefixes/suffixes. A player with 9 strength should deal meaningful damage (significantly more than 1) to level 1 enemies after this change.",
+      "id": "feature-fix-the-level-up-stat-point-allocation-so-that-points-spent-on-str-and-other-stats-in-the-levelupmodal-are-correctly-persisted-and-reflected-in-the-character-tab-s-displayed-stats-after-spending-a-stat-point-the-character-sheet-must-show-the-updated-stat-value-immediately",
+      "title": "Fix the level-up stat point allocation so that points spent on STR (and other stats) in the LevelUpModal are correctly persisted and reflected in the Character tab's displayed stats. After spending a stat point, the Character Sheet must show the updated stat value immediately.",
       "reqIds": [
         "REQ-1"
       ],
       "version": 1
+    },
+    {
+      "id": "feature-fix-the-ability-selection-ui-so-that-when-a-character-has-at-least-one-unspent-ability-point-including-at-level-1-the-available-class-abilities-in-the-abilityselectmodal-are-enabled-and-interactive-not-grayed-out-disabled",
+      "title": "Fix the ability selection UI so that when a character has at least one unspent ability point (including at level 1), the available class abilities in the AbilitySelectModal are enabled and interactive, not grayed out/disabled.",
+      "reqIds": [
+        "REQ-2"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-display-each-character-s-class-e-g-warrior-rogue-mage-on-the-characterselectscreen-character-list-entries-shown-as-a-visible-label-or-badge-beneath-or-alongside-the-character-s-name",
+      "title": "Display each character's class (e.g. Warrior, Rogue, Mage) on the CharacterSelectScreen character list entries, shown as a visible label or badge beneath or alongside the character's name.",
+      "reqIds": [
+        "REQ-3"
+      ],
+      "version": 1
     }
   ],
-  "new_feature_requests": [],
+  "new_feature_requests": [
+    {
+      "id": "AR-1",
+      "summary": "Fix stat points not applying to character strength in Character tab",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-2",
+      "summary": "Fix abilities grayed out at level 1 when ability point is available",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-3",
+      "summary": "Display character class on Character Select screen",
+      "reqIds": [],
+      "status": "pending"
+    }
+  ],
   "gameProjectType": "2d",
   "projectName": "Abyss Ascendant",
   "clarification_mode": "instant",

@@ -1,27 +1,73 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Reduce monster defense by 80% to fix combat balance",
+  "title": "Fix stat allocation, unlock abilities at level 1, show class on character select",
   "requirements": [
     {
       "id": "REQ-1",
-      "summary": "Reduce all monster defense/armor values by 80% in the combat engine to ensure a player with 9 strength deals meaningful damage to level 1 enemies",
+      "summary": "Fix level-up stat point allocation so that points spent on STR (and other stats) in the LevelUpModal are correctly persisted and reflected in the Character tab's displayed stats immediately after spending.",
       "acceptanceCriteria": [
-        "Monster defense/armor values in monsters.ts (base templates and prefix/suffix modifiers) are reduced by 80%",
-        "The combat engine damage calculation in combatEngine.ts reflects reduced monster defense",
-        "A player with 9 strength deals more than 1 damage per hit against a level 1 enemy",
-        "No other monster stats (HP, attack, speed) are changed"
+        "Spending a stat point on STR during level-up increases the STR value shown in the Character tab by the correct amount.",
+        "All other stats (DEX, INT, VIT) also reflect invested points correctly in the Character tab.",
+        "The updated stat values persist across navigation between screens."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/data/monsters.ts",
+          "path": "frontend/src/components/LevelUpModal.tsx",
           "operation": "modify",
-          "description": "Reduce all defense/armor values in base monster templates by 80%. For each monster template in the baseMonsters array, multiply the defense stat by 0.2 (keeping 20% of the original value). Also reduce defense modifiers in prefix and suffix pools by 80% - multiply all defense bonuses by 0.2. Leave HP, attack, attackSpeed, and all non-defense stats unchanged."
+          "description": "Fix the stat point allocation flow by ensuring that when a user clicks confirm in the LevelUpModal, the allocated points (via the StatsUpdate object) are properly sent to the backend updateStats mutation. Verify that the mutation is awaited and that the modal closes only after successful backend persistence. Ensure the local state for allocated points correctly builds the StatsUpdate payload with strIncrease, dexIncrease, intIncrease, and vitIncrease fields matching the points spent."
         },
         {
-          "path": "frontend/src/engine/combatEngine.ts",
+          "path": "frontend/src/hooks/useQueries.ts",
           "operation": "modify",
-          "description": "Verify that the damage calculation in the combat engine correctly applies the reduced monster defense values when computing damage dealt to monsters. Ensure the damage formula uses the monster's defense stat (which will now be 80% lower) to calculate final damage. The expected behavior is that a player with 9 strength should now deal significantly more than 1 damage per hit to level 1 enemies. No changes to the damage formula itself are needed - this operation is to confirm the existing formula will work correctly with the reduced defense values from monsters.ts."
+          "description": "Review and fix the updateStats mutation to ensure it correctly invalidates the character queries after successfully persisting stat changes to the backend. Ensure the mutation calls actor.updateStats with the correct StatsUpdate payload and invalidates both the character detail query and the characters list query so that the Character tab immediately reflects the updated stats."
+        },
+        {
+          "path": "frontend/src/components/CharacterSheet.tsx",
+          "operation": "modify",
+          "description": "Verify that the CharacterSheet correctly displays the character's baseStats values from the backend data (not from stale local state). Ensure that after the LevelUpModal closes and the queries are invalidated, the displayed STR, DEX, INT, and VIT values reflect the updated backend state. If the sheet uses derived stats or a local character object, ensure those are recalculated from the fresh backend data."
+        },
+        {
+          "path": "frontend/src/hooks/useLocalCharacter.ts",
+          "operation": "modify",
+          "description": "Ensure that the LocalCharacter hook correctly merges backend baseStats with any local overrides, and that when backend stats are updated via the updateStats mutation, the hook invalidates or refetches the backend character data so the new baseStats values are immediately reflected in the UI. If baseStats are cached in localStorage, ensure they are cleared or updated after a successful stat allocation."
+        }
+      ]
+    },
+    {
+      "id": "REQ-2",
+      "summary": "Fix the ability selection UI so that when a character has at least one unspent ability point (including at level 1), the available class abilities in the AbilitySelectModal are enabled and interactive, not grayed out/disabled.",
+      "acceptanceCriteria": [
+        "At level 1 with 1 unspent ability point, all eligible class abilities are displayed as selectable (not grayed out).",
+        "Clicking an ability at level 1 successfully selects and equips it.",
+        "Abilities are only grayed out when the player has zero unspent ability points or has already filled all ability slots."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/components/AbilitySelectModal.tsx",
+          "operation": "modify",
+          "description": "Fix the ability selection logic to correctly enable abilities when the character has unspent ability points. Review the condition that determines whether an ability is grayed out or disabled: ensure that abilities are enabled if (1) the character has at least one unspent ability point, and (2) the ability is not already equipped. Remove any incorrect level checks or other conditions that prevent abilities from being selectable at level 1. Ensure the UI clearly shows the number of unspent ability points and the number of available slots, and that clicking an enabled ability successfully adds it to the selected abilities list."
+        },
+        {
+          "path": "frontend/src/types/game.ts",
+          "operation": "modify",
+          "description": "Review and fix the calculateAbilityPoints utility function if it exists, or any other utility that computes unspent ability points. Ensure that at level 1, if the character should have 1 ability point (or more), the function correctly returns that value. Verify that the ability point calculation is consistent with the game design (e.g., 1 ability point per level or a fixed starting amount), and that this value is used consistently in the AbilitySelectModal to enable/disable abilities."
+        }
+      ]
+    },
+    {
+      "id": "REQ-3",
+      "summary": "Display each character's class (e.g. Warrior, Rogue, Mage) on the CharacterSelectScreen character list entries, shown as a visible label or badge beneath or alongside the character's name.",
+      "acceptanceCriteria": [
+        "Each character card/row on the Character Select screen shows the character's class name.",
+        "The class label is visually distinct and readable against the card background.",
+        "All three classes (Warrior, Rogue, Mage) display their correct class name."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/components/CharacterSelectScreen.tsx",
+          "operation": "modify",
+          "description": "Add a visible class label or badge to each character card/row in the character list on the CharacterSelectScreen. Display the character's class property (e.g., 'Warrior', 'Rogue', 'Mage') as a text label beneath or alongside the character's name. Style the class label with a distinct color, font size, or badge background to make it visually readable and distinct from the character name and other metadata (level, realm). Ensure all three classes render their correct class name and that the label is consistent across all character entries."
         }
       ]
     }

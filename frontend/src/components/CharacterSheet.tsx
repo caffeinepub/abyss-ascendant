@@ -1,199 +1,278 @@
 import React, { useState } from 'react';
-import { LocalCharacter, BaseStats, calculateAvailableAbilityPoints, calculateUnspentStatPoints } from '../types/game';
-import { useSpendStatPoints } from '../hooks/useQueries';
+import { Shield, Zap, Heart, Sword, Star, Plus, Loader2 } from 'lucide-react';
+import {
+  LocalCharacter,
+  BaseStats,
+  calculateAvailableAbilityPoints,
+  calculateUnspentStatPoints,
+} from '../types/game';
 import { ABILITIES } from '../data/abilities';
 import LevelUpModal from './LevelUpModal';
 import AbilitySelectModal from './AbilitySelectModal';
-import { Shield, Sword, Zap, Heart, Star, BookOpen, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import { useUpdateStats, useSpendStatPoints, useEquipAbilities } from '../hooks/useQueries';
+import type { Ability as BackendAbility } from '../backend';
 
 interface CharacterSheetProps {
   character: LocalCharacter;
   onUpdateBaseStats: (newBaseStats: BaseStats, newTotalSpent: number) => void;
-  onUpdateAbilities: (abilities: string[]) => void;
+  onUpdateEquippedAbilities: (abilities: string[]) => void;
 }
 
-export default function CharacterSheet({ character, onUpdateBaseStats, onUpdateAbilities }: CharacterSheetProps) {
+export default function CharacterSheet({
+  character,
+  onUpdateBaseStats,
+  onUpdateEquippedAbilities,
+}: CharacterSheetProps) {
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [showAbilityModal, setShowAbilityModal] = useState(false);
-  const spendStatPoints = useSpendStatPoints();
 
-  // Single source of truth for unspent stat points
+  const updateStatsMutation = useUpdateStats();
+  const spendStatPointsMutation = useSpendStatPoints();
+  const equipAbilitiesMutation = useEquipAbilities();
+
   const unspentStatPoints = calculateUnspentStatPoints(
     character.totalStatPointsEarned,
     character.totalStatPointsSpent
   );
+  const availableAbilityPoints = calculateAvailableAbilityPoints(character.level);
 
-  // Single source of truth for ability points
-  const totalAbilityPoints = calculateAvailableAbilityPoints(character.level);
-  const usedAbilityPoints = character.abilities.length;
-
-  const xpProgress = character.level < 50
-    ? Math.min(100, (character.xp / (character.level * 100)) * 100)
-    : 100;
-
-  const handleLevelUpConfirm = async (newBaseStats: BaseStats, newTotalSpent: number) => {
+  const handleLevelUpConfirm = async (statsUpdate: {
+    strIncrease: number;
+    dexIncrease: number;
+    intIncrease: number;
+    vitIncrease: number;
+    newTotalSpent: number;
+  }) => {
     try {
-      // Persist to backend
-      await spendStatPoints.mutateAsync({
+      // 1. Update stats on backend (increments baseStats)
+      await updateStatsMutation.mutateAsync({
         characterId: character.id,
-        pointsSpent: newTotalSpent,
+        statsUpdate: {
+          strIncrease: BigInt(statsUpdate.strIncrease),
+          dexIncrease: BigInt(statsUpdate.dexIncrease),
+          intIncrease: BigInt(statsUpdate.intIncrease),
+          vitIncrease: BigInt(statsUpdate.vitIncrease),
+        },
       });
-      onUpdateBaseStats(newBaseStats, newTotalSpent);
+
+      // 2. Record total spent points on backend
+      await spendStatPointsMutation.mutateAsync({
+        characterId: character.id,
+        pointsSpent: BigInt(statsUpdate.newTotalSpent),
+      });
+
+      // 3. Update local state immediately so UI reflects changes without waiting for re-fetch
+      const newBaseStats: BaseStats = {
+        str: character.baseStats.str + statsUpdate.strIncrease,
+        dex: character.baseStats.dex + statsUpdate.dexIncrease,
+        int: character.baseStats.int + statsUpdate.intIncrease,
+        vit: character.baseStats.vit + statsUpdate.vitIncrease,
+      };
+      onUpdateBaseStats(newBaseStats, statsUpdate.newTotalSpent);
       setShowLevelUpModal(false);
     } catch (err) {
-      console.error('Failed to save stat allocation:', err);
+      console.error('Failed to update stats:', err);
     }
   };
 
-  const realmColor = character.realm === 'Hardcore' ? 'text-red-400' : 'text-blue-400';
-  const realmBg = character.realm === 'Hardcore' ? 'bg-red-950/30 border-red-800/50' : 'bg-blue-950/30 border-blue-800/50';
+  const handleAbilityConfirm = async (selectedAbilityNames: string[]) => {
+    try {
+      // Convert ability names to backend Ability objects
+      const abilityObjects: BackendAbility[] = selectedAbilityNames
+        .map((name) => {
+          const found = ABILITIES.find((a) => a.name === name);
+          if (!found) return null;
+          return {
+            name: found.name,
+            description: found.description,
+            type: found.effectType,
+            element: found.damageType,
+            power: BigInt(Math.round(found.damageMultiplier * 100)),
+          } as BackendAbility;
+        })
+        .filter((a): a is BackendAbility => a !== null);
+
+      await equipAbilitiesMutation.mutateAsync({
+        characterId: character.id,
+        abilities: abilityObjects,
+      });
+
+      onUpdateEquippedAbilities(selectedAbilityNames);
+      setShowAbilityModal(false);
+    } catch (err) {
+      console.error('Failed to equip abilities:', err);
+      // Still update locally even if backend fails
+      onUpdateEquippedAbilities(selectedAbilityNames);
+      setShowAbilityModal(false);
+    }
+  };
+
+  const statRows = [
+    { label: 'STR', value: character.stats.str, icon: <Sword className="w-4 h-4" />, color: 'text-orange-400' },
+    { label: 'DEX', value: character.stats.dex, icon: <Zap className="w-4 h-4" />, color: 'text-green-400' },
+    { label: 'INT', value: character.stats.int, icon: <Star className="w-4 h-4" />, color: 'text-blue-400' },
+    { label: 'VIT', value: character.stats.vit, icon: <Heart className="w-4 h-4" />, color: 'text-red-400' },
+  ];
+
+  const equippedAbilityObjects = character.equippedAbilities
+    .map((name) => ABILITIES.find((a) => a.name === name))
+    .filter(Boolean);
+
+  const isSaving =
+    updateStatsMutation.isPending ||
+    spendStatPointsMutation.isPending ||
+    equipAbilitiesMutation.isPending;
 
   return (
-    <div className="min-h-screen bg-surface-1 p-4">
-      <div className="max-w-2xl mx-auto space-y-4">
-        {/* Character Header */}
-        <div className={`rounded-lg border p-4 ${realmBg}`}>
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="font-display text-2xl text-foreground">{character.name}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant="outline" className={`${realmColor} border-current text-xs`}>
-                  {character.realm}
-                </Badge>
-                <span className="text-muted-foreground text-sm">Level {character.level}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-muted-foreground">Status</div>
-              <div className={`font-medium ${character.status === 'Alive' ? 'text-green-400' : 'text-red-400'}`}>
-                {character.status}
-              </div>
-            </div>
-          </div>
-
-          {/* XP Bar */}
-          <div className="mt-3">
-            <div className="flex justify-between text-xs text-muted-foreground mb-1">
-              <span>Experience</span>
-              <span>{character.xp} / {character.level * 100} XP</span>
-            </div>
-            <Progress value={xpProgress} className="h-2" />
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="bg-surface-2 rounded-lg border border-border p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-display text-lg text-foreground">Stats</h3>
-            {unspentStatPoints > 0 && (
-              <Button
-                size="sm"
-                onClick={() => setShowLevelUpModal(true)}
-                className="flex items-center gap-1 text-xs"
-              >
-                <Star className="w-3 h-3" />
-                {unspentStatPoints} Point{unspentStatPoints !== 1 ? 's' : ''} Available
-              </Button>
+    <div className="max-w-2xl mx-auto p-4 space-y-4">
+      {/* Character header */}
+      <div className="bg-surface-1 rounded-lg border border-border p-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-lg overflow-hidden border border-border/50 bg-surface-2 flex-shrink-0">
+            {character.class === 'Warrior' && (
+              <img src="/assets/generated/class-warrior.dim_256x256.png" alt="Warrior" className="w-full h-full object-cover" />
+            )}
+            {character.class === 'Rogue' && (
+              <img src="/assets/generated/class-rogue.dim_256x256.png" alt="Rogue" className="w-full h-full object-cover" />
+            )}
+            {character.class === 'Mage' && (
+              <img src="/assets/generated/class-mage.dim_256x256.png" alt="Mage" className="w-full h-full object-cover" />
             )}
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <StatRow icon={<Sword className="w-4 h-4 text-red-400" />} label="Strength" value={character.stats.str} />
-            <StatRow icon={<Zap className="w-4 h-4 text-yellow-400" />} label="Dexterity" value={character.stats.dex} />
-            <StatRow icon={<BookOpen className="w-4 h-4 text-blue-400" />} label="Intelligence" value={character.stats.int} />
-            <StatRow icon={<Heart className="w-4 h-4 text-pink-400" />} label="Vitality" value={character.stats.vit} />
-          </div>
-
-          <div className="mt-3 pt-3 border-t border-border grid grid-cols-2 gap-3">
-            <StatRow icon={<Heart className="w-4 h-4 text-health-high" />} label="Max HP" value={character.stats.maxHp} />
-            <StatRow icon={<Shield className="w-4 h-4 text-cyan-400" />} label="Crit Chance" value={`${character.stats.critChance}%`} />
-          </div>
-
-          {/* Stat points summary */}
-          <div className="mt-3 pt-3 border-t border-border text-xs text-muted-foreground flex justify-between">
-            <span>Total earned: {character.totalStatPointsEarned}</span>
-            <span>Spent: {character.totalStatPointsSpent}</span>
-            <span className={unspentStatPoints > 0 ? 'text-yellow-400 font-medium' : ''}>
-              Available: {unspentStatPoints}
-            </span>
-          </div>
-        </div>
-
-        {/* Abilities */}
-        <div className="bg-surface-2 rounded-lg border border-border p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-display text-lg text-foreground">Abilities</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {usedAbilityPoints}/{totalAbilityPoints} slots used
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowAbilityModal(true)}
-                className="flex items-center gap-1 text-xs"
-              >
-                Manage
-                <ChevronRight className="w-3 h-3" />
-              </Button>
-            </div>
-          </div>
-
-          {character.abilities.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-4">
-              No abilities selected. Click Manage to choose your abilities.
+          <div>
+            <h2 className="font-display font-bold text-foreground text-lg">{character.name}</h2>
+            <p className="text-sm text-muted-foreground">
+              Level {character.level} {character.class}
             </p>
-          ) : (
-            <div className="space-y-2">
-              {character.abilities.map(abilityId => {
-                const ability = ABILITIES.find(a => a.id === abilityId);
-                if (!ability) return null;
-                return (
-                  <div key={abilityId} className="flex items-center gap-3 bg-surface-1 rounded px-3 py-2 border border-border">
-                    <img src="/assets/generated/ability-icon-placeholder.dim_64x64.png" alt="" className="w-8 h-8 rounded" />
-                    <div className="flex-1">
-                      <div className="font-medium text-sm text-foreground">{ability.name}</div>
-                      <div className="text-xs text-muted-foreground">{ability.description}</div>
-                    </div>
-                    <span className="text-xs text-muted-foreground">CD: {ability.cooldown}t</span>
-                  </div>
-                );
-              })}
+          </div>
+          {isSaving && (
+            <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Saving...
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="bg-surface-1 rounded-lg border border-border p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+            Base Stats
+          </h3>
+          {unspentStatPoints > 0 && (
+            <button
+              onClick={() => setShowLevelUpModal(true)}
+              className="flex items-center gap-1 text-xs bg-accent/20 text-accent border border-accent/30 px-2 py-1 rounded hover:bg-accent/30 transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              {unspentStatPoints} point{unspentStatPoints !== 1 ? 's' : ''} to spend
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {statRows.map(({ label, value, icon, color }) => (
+            <div key={label} className="flex items-center gap-2 bg-surface-2 rounded p-2">
+              <span className={color}>{icon}</span>
+              <span className="text-xs text-muted-foreground w-8">{label}</span>
+              <span className="font-bold text-foreground ml-auto">{value}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground">
+          <span>Max HP</span>
+          <span className="font-bold text-foreground">{character.stats.maxHp}</span>
+        </div>
+        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+          <span>Stat points</span>
+          <span>
+            {character.totalStatPointsSpent} spent ·{' '}
+            <span className={unspentStatPoints > 0 ? 'text-accent font-medium' : ''}>
+              {unspentStatPoints} available
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {/* Abilities */}
+      <div className="bg-surface-1 rounded-lg border border-border p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+            Abilities
+          </h3>
+          <button
+            onClick={() => setShowAbilityModal(true)}
+            className="flex items-center gap-1 text-xs bg-surface-2 text-muted-foreground border border-border px-2 py-1 rounded hover:text-foreground hover:border-foreground/30 transition-colors"
+          >
+            <Zap className="w-3 h-3" />
+            {equippedAbilityObjects.length > 0 ? 'Manage' : 'Unlock'}
+          </button>
         </div>
 
-        {/* Equipment Summary */}
-        <div className="bg-surface-2 rounded-lg border border-border p-4">
-          <h3 className="font-display text-lg text-foreground mb-3">Equipment</h3>
-          {character.equippedItems.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-2">No items equipped.</p>
-          ) : (
-            <div className="space-y-2">
-              {character.equippedItems.map(item => (
-                <div key={item.id} className="flex items-center gap-2 text-sm">
-                  <span className={`w-2 h-2 rounded-full ${
-                    item.rarity === 'Legendary' ? 'bg-yellow-400' :
-                    item.rarity === 'Rare' ? 'bg-blue-400' :
-                    item.rarity === 'Uncommon' ? 'bg-green-400' :
-                    'bg-gray-400'
-                  }`} />
-                  <span className="text-foreground">{item.name}</span>
-                  <span className="text-muted-foreground text-xs ml-auto">{item.itemType}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => {
+            const ability = equippedAbilityObjects[i];
+            return (
+              <div
+                key={i}
+                className={`flex items-center gap-2 rounded p-2 border ${
+                  ability
+                    ? 'bg-surface-2 border-accent/20'
+                    : 'bg-surface-2/30 border-border/30 border-dashed'
+                }`}
+              >
+                {ability ? (
+                  <>
+                    <Zap className="w-4 h-4 text-accent flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-foreground truncate">{ability.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">{ability.description}</div>
+                    </div>
+                    <div className="text-xs text-orange-400 flex-shrink-0">
+                      {(ability.damageMultiplier * 100).toFixed(0)}%
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground/40 mx-auto">
+                    {availableAbilityPoints > i ? '— Available slot —' : '— Locked —'}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
+
+        <p className="text-xs text-muted-foreground mt-2">
+          {availableAbilityPoints} ability slot{availableAbilityPoints !== 1 ? 's' : ''} unlocked · 12.5% trigger chance
+        </p>
+      </div>
+
+      {/* Equipment summary */}
+      <div className="bg-surface-1 rounded-lg border border-border p-4">
+        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-3">
+          Equipment
+        </h3>
+        {character.equippedItems.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No items equipped.</p>
+        ) : (
+          <div className="space-y-1">
+            {character.equippedItems.map((item) => (
+              <div key={item.id} className="flex items-center gap-2 text-xs">
+                <Shield className="w-3 h-3 text-muted-foreground" />
+                <span className="text-foreground">{item.name}</span>
+                <span className="text-muted-foreground ml-auto">{item.itemType}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Modals */}
       {showLevelUpModal && unspentStatPoints > 0 && (
         <LevelUpModal
           character={character}
+          newLevel={character.level}
+          statPointsToSpend={unspentStatPoints}
           onConfirm={handleLevelUpConfirm}
           onClose={() => setShowLevelUpModal(false)}
         />
@@ -202,29 +281,10 @@ export default function CharacterSheet({ character, onUpdateBaseStats, onUpdateA
       {showAbilityModal && (
         <AbilitySelectModal
           character={character}
-          onConfirm={(abilities) => {
-            onUpdateAbilities(abilities);
-            setShowAbilityModal(false);
-          }}
           onClose={() => setShowAbilityModal(false)}
+          onConfirm={handleAbilityConfirm}
         />
       )}
-    </div>
-  );
-}
-
-interface StatRowProps {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-}
-
-function StatRow({ icon, label, value }: StatRowProps) {
-  return (
-    <div className="flex items-center gap-2 bg-surface-1 rounded px-3 py-2 border border-border">
-      {icon}
-      <span className="text-sm text-muted-foreground flex-1">{label}</span>
-      <span className="font-mono font-medium text-foreground">{value}</span>
     </div>
   );
 }

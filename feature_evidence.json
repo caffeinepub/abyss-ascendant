@@ -2,10 +2,13 @@
   "kind": "feature_evidence_report",
   "features": [
     {
-      "featureId": "feature-in-the-combat-engine-reduce-all-monster-defense-armor-values-by-80-this-applies-to-base-monster-stat-blocks-and-any-defense-contributions-from-monster-prefixes-suffixes-a-player-with-9-strength-should-deal-meaningful-damage-significantly-more-than-1-to-level-1-enemies-after-this-change",
-      "featureTitle": "In the combat engine, reduce all monster defense/armor values by 80%. This applies to base monster stat blocks and any defense contributions from monster prefixes/suffixes. A player with 9 strength should deal meaningful damage (significantly more than 1) to level 1 enemies after this change.",
+      "featureId": "feature-fix-the-level-up-stat-point-allocation-so-that-points-spent-on-str-and-other-stats-in-the-levelupmodal-are-correctly-persisted-and-reflected-in-the-character-tab-s-displayed-stats-after-spending-a-stat-point-the-character-sheet-must-show-the-updated-stat-value-immediately",
+      "featureTitle": "Fix the level-up stat point allocation so that points spent on STR (and other stats) in the LevelUpModal are correctly persisted and reflected in the Character tab's displayed stats. After spending a stat point, the Character Sheet must show the updated stat value immediately.",
       "files": [
-        "frontend/src/data/monsters.ts"
+        "frontend/src/components/CharacterSheet.tsx",
+        "frontend/src/components/LevelUpModal.tsx",
+        "frontend/src/hooks/useLocalCharacter.ts",
+        "frontend/src/hooks/useQueries.ts"
       ],
       "components": [
         "authorization@4.0.0",
@@ -18,6 +21,46 @@
       ],
       "testIds": [
         "REQ-1"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-fix-the-ability-selection-ui-so-that-when-a-character-has-at-least-one-unspent-ability-point-including-at-level-1-the-available-class-abilities-in-the-abilityselectmodal-are-enabled-and-interactive-not-grayed-out-disabled",
+      "featureTitle": "Fix the ability selection UI so that when a character has at least one unspent ability point (including at level 1), the available class abilities in the AbilitySelectModal are enabled and interactive, not grayed out/disabled.",
+      "files": [
+        "frontend/src/components/AbilitySelectModal.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-2"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-display-each-character-s-class-e-g-warrior-rogue-mage-on-the-characterselectscreen-character-list-entries-shown-as-a-visible-label-or-badge-beneath-or-alongside-the-character-s-name",
+      "featureTitle": "Display each character's class (e.g. Warrior, Rogue, Mage) on the CharacterSelectScreen character list entries, shown as a visible label or badge beneath or alongside the character's name.",
+      "files": [
+        "frontend/src/components/CharacterSelectScreen.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-3"
       ],
       "confidence": "high"
     }

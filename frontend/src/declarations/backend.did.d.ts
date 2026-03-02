@@ -10,6 +10,13 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface Ability {
+  'element' : string,
+  'name' : string,
+  'type' : string,
+  'description' : string,
+  'power' : bigint,
+}
 export interface AdvancedStats {
   'maxHP' : bigint,
   'currentHP' : bigint,
@@ -26,6 +33,8 @@ export interface Character {
   'xp' : bigint,
   'status' : CharacterStatus,
   'totalStatPointsEarned' : bigint,
+  'equippedAbilities' : Array<Ability>,
+  'class' : string,
   'name' : string,
   'season' : bigint,
   'level' : bigint,
@@ -43,6 +52,8 @@ export interface CharacterCreationParams {
   'int' : bigint,
   'str' : bigint,
   'vit' : bigint,
+  'equippedAbilities' : Array<Ability>,
+  'class' : string,
   'name' : string,
   'realm' : Realm,
 }
@@ -89,6 +100,12 @@ export type SetHpError = { 'noPermission' : null } |
   { 'characterNotFound' : null } |
   { 'maxHPExceeded' : null } |
   { 'alreadyFullHP' : null };
+export interface StatsUpdate {
+  'vitIncrease' : bigint,
+  'strIncrease' : bigint,
+  'intIncrease' : bigint,
+  'dexIncrease' : bigint,
+}
 export interface UserProfile { 'username' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -129,6 +146,7 @@ export interface _SERVICE {
       { 'err' : CharacterCreationError }
   >,
   'deleteCharacter' : ActorMethod<[CharacterId], undefined>,
+  'equipAbilities' : ActorMethod<[CharacterId, Array<Ability>], undefined>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   /**
@@ -137,6 +155,7 @@ export interface _SERVICE {
    */
   'getCharacter' : ActorMethod<[CharacterId], [] | [Character]>,
   'getCharacters' : ActorMethod<[], Array<Character>>,
+  'getEquippedAbilities' : ActorMethod<[CharacterId], Array<Ability>>,
   'getItem' : ActorMethod<[string], [] | [Item]>,
   'getItemImage' : ActorMethod<[string], ExternalBlob>,
   'getMarketplaceListings' : ActorMethod<[], Array<MarketplaceListing>>,
@@ -151,6 +170,7 @@ export interface _SERVICE {
   >,
   'spendStatPoints' : ActorMethod<[CharacterId, bigint], undefined>,
   'submitDungeonResult' : ActorMethod<[DungeonResult], undefined>,
+  'updateStats' : ActorMethod<[CharacterId, StatsUpdate], undefined>,
   'uploadItemImage' : ActorMethod<[string, ExternalBlob], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;

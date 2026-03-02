@@ -1,37 +1,72 @@
 {
   "kind": "build_request",
-  "title": "Reduce monster defense by 80% to fix combat balance",
+  "title": "Fix stat allocation, unlock abilities at level 1, show class on character select",
   "projectName": "Abyss Ascendant",
   "priority": "normal",
   "requirements": [
     {
       "id": "REQ-1",
-      "text": "In the combat engine, reduce all monster defense/armor values by 80%. This applies to base monster stat blocks and any defense contributions from monster prefixes/suffixes. A player with 9 strength should deal meaningful damage (significantly more than 1) to level 1 enemies after this change.",
-      "target": "frontend",
+      "text": "Fix the level-up stat point allocation so that points spent on STR (and other stats) in the LevelUpModal are correctly persisted and reflected in the Character tab's displayed stats. After spending a stat point, the Character Sheet must show the updated stat value immediately.",
+      "target": "both",
       "source": {
         "messageIds": [
-          "msg-6",
-          "msg-8"
+          "msg-3"
         ],
         "quotes": [
-          "Reduce monster defense by 80%, I have 9 strength and am hitting level 1 enemies for 1. This is not acceptable."
+          "Level up stat points still aren't being added to the characters strength when checking in the Character tab."
         ]
       },
       "acceptanceCriteria": [
-        "Monster defense/armor values in monsters.ts (base templates and prefix/suffix modifiers) are reduced by 80%",
-        "The combat engine damage calculation in combatEngine.ts reflects reduced monster defense",
-        "A player with 9 strength deals more than 1 damage per hit against a level 1 enemy",
-        "No other monster stats (HP, attack, speed) are changed"
+        "Spending a stat point on STR during level-up increases the STR value shown in the Character tab by the correct amount.",
+        "All other stats (DEX, INT, VIT) also reflect invested points correctly in the Character tab.",
+        "The updated stat values persist across navigation between screens."
+      ]
+    },
+    {
+      "id": "REQ-2",
+      "text": "Fix the ability selection UI so that when a character has at least one unspent ability point (including at level 1), the available class abilities in the AbilitySelectModal are enabled and interactive, not grayed out/disabled.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-3"
+        ],
+        "quotes": [
+          "I have an ability point to spend at level 1 but all of the abilities are grayed out so I can't select one."
+        ]
+      },
+      "acceptanceCriteria": [
+        "At level 1 with 1 unspent ability point, all eligible class abilities are displayed as selectable (not grayed out).",
+        "Clicking an ability at level 1 successfully selects and equips it.",
+        "Abilities are only grayed out when the player has zero unspent ability points or has already filled all ability slots."
+      ]
+    },
+    {
+      "id": "REQ-3",
+      "text": "Display each character's class (e.g. Warrior, Rogue, Mage) on the CharacterSelectScreen character list entries, shown as a visible label or badge beneath or alongside the character's name.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-3"
+        ],
+        "quotes": [
+          "On the Character select screen can we display the class of each character?"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Each character card/row on the Character Select screen shows the character's class name.",
+        "The class label is visually distinct and readable against the card background.",
+        "All three classes (Warrior, Rogue, Mage) display their correct class name."
       ]
     }
   ],
   "constraints": [
-    "Only modify monster defense-related values — do not alter player stats, monster HP, monster attack power, or any other game balance values"
+    "Do not modify files listed under frontend.immutablePaths.",
+    "Keep all backend logic within the single main actor in backend/main.mo."
   ],
   "nonGoals": [
-    "Rebalancing player stats or abilities",
-    "Changing XP rewards or loot drop rates",
-    "Modifying any backend Motoko code"
+    "Adding new abilities or rebalancing existing ability stats.",
+    "Changes to the dungeon combat engine or loot system.",
+    "Any new screens or navigation flows."
   ],
   "imageRequirements": {
     "required": [],

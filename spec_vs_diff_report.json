@@ -1,14 +1,66 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T17:51:07.064Z",
-  "summary": "The diff implements REQ-1 by reducing monster defense/armor values by 80% in monsters.ts (base templates and prefix/suffix modifiers). The combatEngine.ts is also modified per the file summary. All acceptance criteria appear to be addressed: defense values are reduced by 80% in both base templates and prefix/suffix modifiers, combatEngine.ts is updated, and no HP/attack/speed stats appear changed.",
+  "generatedAt": "2026-03-02T19:42:51.794Z",
+  "summary": "All three requirements appear to be implemented in the diff. REQ-1 (stat point allocation fix) is addressed in LevelUpModal.tsx, CharacterSheet.tsx, and useLocalCharacter.ts. REQ-2 (ability selection enabled at level 1) is addressed in AbilitySelectModal.tsx. REQ-3 (class display on character select) is addressed in CharacterSelectScreen.tsx with CLASS_COLORS, CLASS_ICONS, and CLASS_IMAGES maps plus rendering logic.",
   "missing_requirements": [],
-  "hallucinated_features": [],
-  "confidence": 0.9,
+  "hallucinated_features": [
+    {
+      "description": "Monster defense values reduced by 80% to fix combat balance",
+      "reason": "The build request explicitly lists 'Changes to the dungeon combat engine or loot system' as a non-goal, yet the diff summary describes reducing all monster defense values by 80% in monsters.ts.",
+      "evidence": [
+        "frontend/src/data/monsters.ts"
+      ]
+    },
+    {
+      "description": "generateMonster() integration in DungeonSelectScreen passing GeneratedMonster[] to onStartDungeon",
+      "reason": "The build request lists 'Changes to the dungeon combat engine or loot system' as a non-goal. Generating monsters and changing the onStartDungeon callback signature is outside the scope of the three requested fixes.",
+      "evidence": [
+        "frontend/src/components/DungeonSelectScreen.tsx"
+      ]
+    },
+    {
+      "description": "DungeonRunScreen updated to use combatAbilities array (up to 3 equipped abilities) and equippedAbilities fallback logic",
+      "reason": "The build request explicitly lists 'Changes to the dungeon combat engine or loot system' as a non-goal.",
+      "evidence": [
+        "frontend/src/components/DungeonRunScreen.tsx"
+      ]
+    },
+    {
+      "description": "Combat engine updated to support up to 3 equipped abilities as an array with independent 12.5% trigger chance per round",
+      "reason": "The build request explicitly lists 'Changes to the dungeon combat engine or loot system' as a non-goal.",
+      "evidence": [
+        "frontend/src/engine/combatEngine.ts"
+      ]
+    },
+    {
+      "description": "generateStarterEquipment() function added to loot generator",
+      "reason": "The build request lists 'Changes to the dungeon combat engine or loot system' as a non-goal. Adding new loot generation functions is outside scope.",
+      "evidence": [
+        "frontend/src/engine/lootGenerator.ts"
+      ]
+    },
+    {
+      "description": "ItemTooltip updated to prominently display Base Damage for Weapons and Base Defense for Armor",
+      "reason": "This UI change was not requested in any of the three requirements and is not listed as a goal.",
+      "evidence": [
+        "frontend/src/components/ItemTooltip.tsx"
+      ]
+    }
+  ],
+  "confidence": 0.82,
   "changed_files": [
+    "backend/main.mo",
     "frontend-file-summaries.txt",
-    "frontend/src/data/monsters.ts",
+    "frontend/src/App.tsx",
+    "frontend/src/components/AbilitySelectModal.tsx",
+    "frontend/src/components/CharacterCreation.tsx",
+    "frontend/src/components/CharacterSelectScreen.tsx",
+    "frontend/src/components/CharacterSheet.tsx",
+    "frontend/src/components/DungeonRunScreen.tsx",
+    "frontend/src/components/LevelUpModal.tsx",
+    "frontend/src/hooks/useLocalCharacter.ts",
+    "frontend/src/hooks/useQueries.ts",
     "project_state.json"
   ]
 }

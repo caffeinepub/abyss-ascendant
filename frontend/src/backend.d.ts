@@ -21,10 +21,18 @@ export interface AdvancedStats {
     critChance: bigint;
     critPower: bigint;
 }
+export interface StatsUpdate {
+    vitIncrease: bigint;
+    strIncrease: bigint;
+    intIncrease: bigint;
+    dexIncrease: bigint;
+}
 export interface Character {
     xp: bigint;
     status: CharacterStatus;
     totalStatPointsEarned: bigint;
+    equippedAbilities: Array<Ability>;
+    class: string;
     name: string;
     season: bigint;
     level: bigint;
@@ -39,6 +47,8 @@ export interface CharacterCreationParams {
     int: bigint;
     str: bigint;
     vit: bigint;
+    equippedAbilities: Array<Ability>;
+    class: string;
     name: string;
     realm: Realm;
 }
@@ -67,6 +77,13 @@ export interface DungeonResult {
     newLevel: bigint;
     xpEarned: bigint;
     characterId: CharacterId;
+}
+export interface Ability {
+    element: string;
+    name: string;
+    type: string;
+    description: string;
+    power: bigint;
 }
 export interface BaseStats {
     dex: bigint;
@@ -123,6 +140,7 @@ export interface backendInterface {
         err: CharacterCreationError;
     }>;
     deleteCharacter(characterId: CharacterId): Promise<void>;
+    equipAbilities(characterId: CharacterId, abilities: Array<Ability>): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     /**
@@ -131,6 +149,7 @@ export interface backendInterface {
      */
     getCharacter(characterId: CharacterId): Promise<Character | null>;
     getCharacters(): Promise<Array<Character>>;
+    getEquippedAbilities(characterId: CharacterId): Promise<Array<Ability>>;
     getItem(itemId: string): Promise<Item | null>;
     getItemImage(itemId: string): Promise<ExternalBlob>;
     getMarketplaceListings(): Promise<Array<MarketplaceListing>>;
@@ -147,5 +166,6 @@ export interface backendInterface {
     }>;
     spendStatPoints(characterId: CharacterId, pointsSpent: bigint): Promise<void>;
     submitDungeonResult(result: DungeonResult): Promise<void>;
+    updateStats(characterId: CharacterId, statsUpdate: StatsUpdate): Promise<void>;
     uploadItemImage(itemId: string, externalBlob: ExternalBlob): Promise<void>;
 }

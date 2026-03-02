@@ -1,35 +1,72 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T17:51:07.067Z",
+  "generatedAt": "2026-03-02T19:42:51.797Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 1,
-    "implemented": 1,
+    "total": 3,
+    "implemented": 3,
     "items": [
       {
         "id": "REQ-1",
-        "summary": "In the combat engine, reduce all monster defense/armor values by 80%. This applies to base monster stat blocks and any defense contributions from monster prefixes/suffixes. A player with 9 strength should deal meaningful damage (significantly more than 1) to level 1 enemies after this change.",
+        "summary": "Fix the level-up stat point allocation so that points spent on STR (and other stats) in the LevelUpModal are correctly persisted and reflected in the Character tab's displayed stats. After spending a stat point, the Character Sheet must show the updated stat value immediately.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/data/monsters.ts",
-          "frontend/src/engine/combatEngine.ts"
+          "frontend/src/components/LevelUpModal.tsx",
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/components/CharacterSheet.tsx",
+          "frontend/src/hooks/useLocalCharacter.ts"
         ],
         "matchedFiles": [
-          "frontend/src/data/monsters.ts"
+          "frontend/src/components/LevelUpModal.tsx",
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/components/CharacterSheet.tsx",
+          "frontend/src/hooks/useLocalCharacter.ts"
+        ]
+      },
+      {
+        "id": "REQ-2",
+        "summary": "Fix the ability selection UI so that when a character has at least one unspent ability point (including at level 1), the available class abilities in the AbilitySelectModal are enabled and interactive, not grayed out/disabled.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/components/AbilitySelectModal.tsx",
+          "frontend/src/types/game.ts"
+        ],
+        "matchedFiles": [
+          "frontend/src/components/AbilitySelectModal.tsx"
+        ]
+      },
+      {
+        "id": "REQ-3",
+        "summary": "Display each character's class (e.g. Warrior, Rogue, Mage) on the CharacterSelectScreen character list entries, shown as a visible label or badge beneath or alongside the character's name.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/components/CharacterSelectScreen.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/components/CharacterSelectScreen.tsx"
         ]
       }
     ]
   },
   "changedFiles": [
+    "backend/main.mo",
     "build-request.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
-    "frontend/src/data/monsters.ts",
+    "frontend/src/App.tsx",
+    "frontend/src/components/AbilitySelectModal.tsx",
+    "frontend/src/components/CharacterCreation.tsx",
+    "frontend/src/components/CharacterSelectScreen.tsx",
+    "frontend/src/components/CharacterSheet.tsx",
+    "frontend/src/components/DungeonRunScreen.tsx",
+    "frontend/src/components/LevelUpModal.tsx",
+    "frontend/src/hooks/useLocalCharacter.ts",
+    "frontend/src/hooks/useQueries.ts",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

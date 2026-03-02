@@ -5,7 +5,7 @@ import { GeneratedItem } from '../engine/lootGenerator';
 import { GeneratedMonster } from '../data/monsters';
 import { useSubmitDungeonResult, useSetCharacterHp } from '../hooks/useQueries';
 import { calculateLevel } from '../types/game';
-import { Loader2, Sword, Shield, Skull, Trophy, ChevronRight, AlertCircle } from 'lucide-react';
+import { Loader2, Skull, Trophy, ChevronRight, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface DungeonRunScreenProps {
@@ -50,6 +50,11 @@ export default function DungeonRunScreen({
     if (hasStarted.current) return;
     hasStarted.current = true;
 
+    // Use equippedAbilities (up to 3) for combat; fall back to abilities
+    const combatAbilities = character.equippedAbilities.length > 0
+      ? character.equippedAbilities
+      : character.abilities;
+
     const result = simulateCombat(
       {
         str: character.stats.str,
@@ -61,7 +66,8 @@ export default function DungeonRunScreen({
         critChance: character.stats.critChance,
         critPower: character.stats.critPower,
         equippedItems: character.equippedItems,
-        abilities: character.abilities,
+        abilities: combatAbilities,
+        characterClass: character.class,
       },
       dungeonLevel,
       dungeonMode === 'hardcore',
@@ -94,19 +100,16 @@ export default function DungeonRunScreen({
     if (!combatResult) return;
     setSaveError(null);
 
-    // Calculate new XP and level
     const currentXp = character.xp;
     const newTotalXp = currentXp + combatResult.xpEarned;
     const newLevel = Math.min(calculateLevel(newTotalXp), 50);
     const remainingHp = combatResult.remainingHp;
 
-    // Handle death before saving
     if (!combatResult.victory && character.realm === 'Hardcore') {
       onDeath();
       return;
     }
 
-    // Fire backend saves silently in the background — do not block the UI
     const hpToSave = Math.min(remainingHp, character.stats.maxHp);
     submitDungeonResult.mutate({
       characterId,
@@ -116,10 +119,9 @@ export default function DungeonRunScreen({
     });
     setCharacterHp.mutate({
       characterId,
-      hp: hpToSave,
+      hp: BigInt(Math.floor(hpToSave)),
     });
 
-    // Immediately proceed — no waiting for save
     onComplete(combatResult, newTotalXp, newLevel, remainingHp);
   }, [combatResult, character, characterId, submitDungeonResult, setCharacterHp, onComplete, onDeath]);
 
@@ -132,7 +134,6 @@ export default function DungeonRunScreen({
   const isDeath = combatResult ? !combatResult.victory : false;
   const isSoftcoreDeath = isDeath && character.realm === 'Softcore';
 
-  // Derive the first monster's name for the header (if available)
   const firstMonsterName = monsters && monsters.length > 0 ? monsters[0].name : null;
 
   return (
@@ -153,7 +154,6 @@ export default function DungeonRunScreen({
 
         {/* Combat Log */}
         <div className="bg-surface-2 rounded-lg border border-border">
-          {/* Combat log */}
           <div className="p-4 h-80 overflow-y-auto font-mono text-sm">
             {displayedLog.map((line, i) => (
               <div
@@ -205,7 +205,6 @@ export default function DungeonRunScreen({
                 </div>
               </div>
 
-              {/* Loot preview */}
               {combatResult.loot.length > 0 && (
                 <div className="mb-3">
                   <p className="text-xs text-muted-foreground mb-1">Items found:</p>
@@ -227,7 +226,6 @@ export default function DungeonRunScreen({
                 </div>
               )}
 
-              {/* Error message */}
               {phase === 'error' && saveError && (
                 <div className="flex items-center gap-2 text-red-400 text-sm mb-3 bg-red-950/40 rounded p-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -235,7 +233,6 @@ export default function DungeonRunScreen({
                 </div>
               )}
 
-              {/* Action buttons */}
               <div className="flex gap-2 justify-end">
                 {phase === 'error' && (
                   <Button variant="outline" size="sm" onClick={handleRetry}>
