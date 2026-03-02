@@ -96,6 +96,13 @@ actor {
     active : Bool;
   };
 
+  // ── Character creation ──
+
+  public type CharacterCreationError = {
+    #alreadyExists;
+    #noPermission;
+  };
+
   // ── Game state ──
 
   var currentSeason = 1;
@@ -105,11 +112,14 @@ actor {
 
   // ── Character functions ──
 
-  public shared ({ caller }) func createCharacter(name : Text, realm : Realm) : async () {
+  public shared ({ caller }) func createCharacter(name : Text, realm : Realm) : async {
+    #ok : ();
+    #err : CharacterCreationError;
+  } {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authenticated users can create characters");
+      return #err(#noPermission);
     };
-    if (characters.containsKey(caller)) { Runtime.trap("Character already exists") };
+    if (characters.containsKey(caller)) { return #err(#alreadyExists) };
 
     let character : Character = {
       name;
@@ -126,6 +136,7 @@ actor {
     };
 
     characters.add(caller, character);
+    #ok(());
   };
 
   public query ({ caller }) func getCharacter() : async ?Character {

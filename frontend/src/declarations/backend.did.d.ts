@@ -23,6 +23,8 @@ export interface Character {
   'classTier' : bigint,
   'realm' : Realm,
 }
+export type CharacterCreationError = { 'noPermission' : null } |
+  { 'alreadyExists' : null };
 export type CharacterStatus = { 'Dead' : null } |
   { 'Alive' : null };
 export type ExternalBlob = Uint8Array;
@@ -89,7 +91,11 @@ export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'buyItem' : ActorMethod<[string], undefined>,
-  'createCharacter' : ActorMethod<[string, Realm], undefined>,
+  'createCharacter' : ActorMethod<
+    [string, Realm],
+    { 'ok' : null } |
+      { 'err' : CharacterCreationError }
+  >,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCharacter' : ActorMethod<[], [] | [Character]>,

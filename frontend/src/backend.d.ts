@@ -14,6 +14,19 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
+export interface Character {
+    xp: bigint;
+    dex: bigint;
+    int: bigint;
+    str: bigint;
+    vit: bigint;
+    status: CharacterStatus;
+    name: string;
+    season: bigint;
+    level: bigint;
+    classTier: bigint;
+    realm: Realm;
+}
 export interface MarketplaceListing {
     active: boolean;
     item: Item;
@@ -34,21 +47,12 @@ export interface Item {
     itemType: ItemType;
     rarity: Rarity;
 }
-export interface Character {
-    xp: bigint;
-    dex: bigint;
-    int: bigint;
-    str: bigint;
-    vit: bigint;
-    status: CharacterStatus;
-    name: string;
-    season: bigint;
-    level: bigint;
-    classTier: bigint;
-    realm: Realm;
-}
 export interface UserProfile {
     username: string;
+}
+export enum CharacterCreationError {
+    noPermission = "noPermission",
+    alreadyExists = "alreadyExists"
 }
 export enum CharacterStatus {
     Dead = "Dead",
@@ -77,7 +81,13 @@ export enum UserRole {
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     buyItem(itemId: string): Promise<void>;
-    createCharacter(name: string, realm: Realm): Promise<void>;
+    createCharacter(name: string, realm: Realm): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: CharacterCreationError;
+    }>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCharacter(): Promise<Character | null>;

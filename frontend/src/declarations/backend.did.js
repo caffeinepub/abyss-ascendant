@@ -28,6 +28,10 @@ export const Realm = IDL.Variant({
   'Hardcore' : IDL.Null,
   'Softcore' : IDL.Null,
 });
+export const CharacterCreationError = IDL.Variant({
+  'noPermission' : IDL.Null,
+  'alreadyExists' : IDL.Null,
+});
 export const UserProfile = IDL.Record({ 'username' : IDL.Text });
 export const CharacterStatus = IDL.Variant({
   'Dead' : IDL.Null,
@@ -109,7 +113,11 @@ export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'buyItem' : IDL.Func([IDL.Text], [], []),
-  'createCharacter' : IDL.Func([IDL.Text, Realm], [], []),
+  'createCharacter' : IDL.Func(
+      [IDL.Text, Realm],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : CharacterCreationError })],
+      [],
+    ),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCharacter' : IDL.Func([], [IDL.Opt(Character)], ['query']),
@@ -152,6 +160,10 @@ export const idlFactory = ({ IDL }) => {
     'guest' : IDL.Null,
   });
   const Realm = IDL.Variant({ 'Hardcore' : IDL.Null, 'Softcore' : IDL.Null });
+  const CharacterCreationError = IDL.Variant({
+    'noPermission' : IDL.Null,
+    'alreadyExists' : IDL.Null,
+  });
   const UserProfile = IDL.Record({ 'username' : IDL.Text });
   const CharacterStatus = IDL.Variant({
     'Dead' : IDL.Null,
@@ -233,7 +245,11 @@ export const idlFactory = ({ IDL }) => {
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'buyItem' : IDL.Func([IDL.Text], [], []),
-    'createCharacter' : IDL.Func([IDL.Text, Realm], [], []),
+    'createCharacter' : IDL.Func(
+        [IDL.Text, Realm],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : CharacterCreationError })],
+        [],
+      ),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCharacter' : IDL.Func([], [IDL.Opt(Character)], ['query']),

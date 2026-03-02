@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useInternetIdentity } from './hooks/useInternetIdentity';
 import {
   useGetCallerUserProfile,
@@ -64,20 +64,62 @@ export default function App() {
     clearCharacter,
   } = useLocalCharacter();
 
-  // Keep backend character in sync (for season/status checks)
-  useGetCharacter();
+  // Query backend for existing character
+  const {
+    data: backendCharacter,
+    isLoading: backendCharacterLoading,
+    isFetched: backendCharacterFetched,
+  } = useGetCharacter();
 
   const [currentScreen, setCurrentScreen] = useState<Screen>('character');
   const [dungeonMode, setDungeonMode] = useState<DungeonMode>('Catacombs');
   const [dungeonLevel, setDungeonLevel] = useState(1);
   const [pendingLoot, setPendingLoot] = useState<GeneratedItem[]>([]);
 
+  // If backend has a character but local storage doesn't, auto-initialize from backend data.
+  // This handles the case where the user has an existing character (e.g., after clearing local storage
+  // or logging in on a new device).
+  useEffect(() => {
+    if (
+      isAuthenticated &&
+      backendCharacterFetched &&
+      backendCharacter !== null &&
+      backendCharacter !== undefined &&
+      !character
+    ) {
+      const realm = backendCharacter.realm === Realm.Hardcore ? 'Hardcore' : 'Softcore';
+      const allocatedStats: LocalStats = {
+        str: Number(backendCharacter.str),
+        dex: Number(backendCharacter.dex),
+        int: Number(backendCharacter.int),
+        vit: Number(backendCharacter.vit),
+      };
+      initCharacter(backendCharacter.name, realm, allocatedStats);
+    }
+  }, [isAuthenticated, backendCharacterFetched, backendCharacter, character, initCharacter]);
+
   // Show profile setup if authenticated but no profile yet
   const showProfileSetup =
     isAuthenticated && !profileLoading && profileFetched && userProfile === null;
 
-  // Show character creation if authenticated, has profile, but no local character
-  const showCharacterCreation = isAuthenticated && !showProfileSetup && !character;
+  // Show character creation only if:
+  // - authenticated
+  // - has profile
+  // - no local character
+  // - backend character query has completed and returned null (no existing character)
+  const showCharacterCreation =
+    isAuthenticated &&
+    !showProfileSetup &&
+    !character &&
+    backendCharacterFetched &&
+    backendCharacter === null;
+
+  // Show loading while we're waiting for the backend character check
+  const isCheckingBackendCharacter =
+    isAuthenticated &&
+    !showProfileSetup &&
+    !character &&
+    (backendCharacterLoading || !backendCharacterFetched);
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -99,6 +141,14 @@ export default function App() {
     allocatedStats: LocalStats
   ) {
     initCharacter(name, realm === Realm.Hardcore ? 'Hardcore' : 'Softcore', allocatedStats);
+    setCurrentScreen('character');
+  }
+
+  // Called when createCharacter returns #alreadyExists — skip to character sheet
+  function handleCharacterAlreadyExists() {
+    // The backend character query will have been invalidated by the mutation.
+    // The useEffect above will auto-initialize the local character once the query resolves.
+    // Just navigate to the character screen.
     setCurrentScreen('character');
   }
 
@@ -194,9 +244,30 @@ export default function App() {
     );
   }
 
+  // ── Checking for existing backend character ──
+  if (isCheckingBackendCharacter) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <img
+            src="/assets/generated/logo-sigil.dim_256x256.png"
+            alt="Loading"
+            className="w-16 h-16 mx-auto animate-pulse opacity-70"
+          />
+          <p className="text-muted-foreground text-sm animate-pulse">Loading your hero…</p>
+        </div>
+      </div>
+    );
+  }
+
   // ── Character creation ──
   if (showCharacterCreation) {
-    return <CharacterCreation onComplete={handleCharacterCreationComplete} />;
+    return (
+      <CharacterCreation
+        onComplete={handleCharacterCreationComplete}
+        onAlreadyExists={handleCharacterAlreadyExists}
+      />
+    );
   }
 
   // ── Character must exist at this point ──

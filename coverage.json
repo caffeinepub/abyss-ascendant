@@ -1,76 +1,61 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T01:39:22.326Z",
+  "generatedAt": "2026-03-02T02:04:30.143Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
     "total": 3,
-    "implemented": 3,
+    "implemented": 2,
     "items": [
       {
-        "id": "REQ-23",
-        "summary": "Fix equipment stats not being applied to the character's effective stats. In lootGenerator.ts, add a base physical damage value to all generated Weapon items (scaled by rarity and item level). Add a base defense value to all generated Armor items. In combatEngine.ts, update the player stat derivation logic to iterate over all equipped items and sum their base values (physical damage for weapons, defense for armor) plus all affixes (Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance) on top of the character's base stats before any combat calculation. Ensure the character sheet display in CharacterSheet.tsx also reads these aggregated effective stats rather than base stats alone.",
+        "id": "REQ-29",
+        "summary": "In App.tsx, after a user logs in and a realm is selected, query the backend for an existing character for that realm before showing any screen. If a character already exists for the selected realm in the current season, skip the CharacterCreationScreen entirely and route the player directly to the character sheet / dungeon select screen. The character creation screen must only be shown when no character exists for the chosen realm.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/engine/lootGenerator.ts",
-          "frontend/src/engine/combatEngine.ts",
-          "frontend/src/components/CharacterSheet.tsx",
-          "frontend/src/types/game.ts",
-          "frontend/src/components/ItemTooltip.tsx"
+          "frontend/src/App.tsx"
         ],
         "matchedFiles": [
-          "frontend/src/engine/lootGenerator.ts",
-          "frontend/src/engine/combatEngine.ts",
-          "frontend/src/components/CharacterSheet.tsx",
-          "frontend/src/components/ItemTooltip.tsx"
+          "frontend/src/App.tsx"
         ]
       },
       {
-        "id": "REQ-24",
-        "summary": "Add a prefix/suffix name generation system for monsters in monsters.ts and wherever monster names are displayed in combatEngine.ts and DungeonRunScreen.tsx. Define a pool of at least 8 thematic prefixes (e.g. Vile, Rotting, Ancient, Cursed, Feral, Festering, Hungering, Corrupted) and at least 6 thematic suffixes (e.g. Brute, Warden, Scout, Shaman, Ravager, Specter). On each monster spawn, randomly combine a prefix and/or suffix with the base monster type name to produce a unique display name (e.g. 'Cursed Goblin Brute', 'Ancient Troll Shaman'). The base stat profile remains unchanged; only the displayed name varies.",
-        "status": "implemented",
-        "plannedFiles": [
-          "frontend/src/data/monsters.ts",
-          "frontend/src/engine/combatEngine.ts",
-          "frontend/src/components/DungeonRunScreen.tsx"
-        ],
-        "matchedFiles": [
-          "frontend/src/data/monsters.ts",
-          "frontend/src/engine/combatEngine.ts",
-          "frontend/src/components/DungeonRunScreen.tsx"
-        ]
+        "id": "REQ-30",
+        "summary": "In the backend (main.mo), ensure the createCharacter function returns a clear #alreadyExists error variant when a character already exists for the calling principal in the selected realm and current season. The frontend must never receive an ambiguous error for this case.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
       },
       {
-        "id": "REQ-25",
-        "summary": "Expose Ticks Between Attacks as a visible stat for both the player and each monster. In combatEngine.ts, ensure the player's attack interval (in ticks) is derivable from effective stats (e.g. based on Dexterity or a fixed base modified by stat scaling). On CharacterSheet.tsx, add a 'Ticks Between Attacks' row in the derived stats section showing the player's current value. In DungeonRunScreen.tsx, display each spawned monster's ticks-between-attacks value alongside its HP bar or in the combat info panel. Both values must be read directly from the same tick-rate logic used by the combat engine to stay accurate.",
+        "id": "REQ-31",
+        "summary": "In App.tsx, if createCharacter is called and returns an #alreadyExists error (e.g., due to a race condition or duplicate call), the frontend must silently redirect the player to the character sheet / dungeon select screen rather than displaying an error message or crashing.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/engine/combatEngine.ts",
-          "frontend/src/components/CharacterSheet.tsx",
-          "frontend/src/components/DungeonRunScreen.tsx"
+          "frontend/src/App.tsx",
+          "frontend/src/hooks/useQueries.ts"
         ],
         "matchedFiles": [
-          "frontend/src/engine/combatEngine.ts",
-          "frontend/src/components/CharacterSheet.tsx",
-          "frontend/src/components/DungeonRunScreen.tsx"
+          "frontend/src/App.tsx",
+          "frontend/src/hooks/useQueries.ts"
         ]
       }
     ]
   },
   "changedFiles": [
+    "backend/main.mo",
     "build-request.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
-    "frontend/src/components/CharacterSheet.tsx",
-    "frontend/src/components/DungeonRunScreen.tsx",
-    "frontend/src/components/ItemTooltip.tsx",
-    "frontend/src/data/monsters.ts",
-    "frontend/src/engine/combatEngine.ts",
-    "frontend/src/engine/lootGenerator.ts",
+    "frontend/src/App.tsx",
+    "frontend/src/backend.d.ts",
+    "frontend/src/backend.ts",
+    "frontend/src/components/CharacterCreation.tsx",
+    "frontend/src/declarations/backend.did.d.ts",
+    "frontend/src/declarations/backend.did.js",
+    "frontend/src/hooks/useQueries.ts",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

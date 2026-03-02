@@ -1,100 +1,43 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Equipment stat application, monster name variety, and attack speed visibility",
+  "title": "Fix post-login routing: skip character creation when character already exists",
   "requirements": [
     {
-      "id": "REQ-23",
-      "summary": "Fix equipment stats not being applied to character's effective stats by adding base damage/defense to items and aggregating all equipped item stats in combat calculations",
+      "id": "REQ-29",
+      "summary": "After login and realm selection, query backend for existing character and skip CharacterCreationScreen if character exists, routing directly to character sheet/dungeon select screen",
       "acceptanceCriteria": [
-        "Generated Weapon items have a non-zero base physical damage value visible in their tooltip.",
-        "Generated Armor items have a non-zero base defense value visible in their tooltip.",
-        "Equipping a weapon increases the player's effective physical damage in combat calculations.",
-        "Equipping armor increases the player's effective defense in combat calculations.",
-        "All affix stats (Str, Dex, Int, Vit, +HP, +PhysDmg, +MagDmg, +Def, +CritChance) on equipped items are added to effective stats.",
-        "CharacterSheet displays effective stats that include contributions from all equipped items.",
-        "Unequipping an item removes its stat contributions from effective stats."
+        "After login, if a character exists for the selected realm, the CharacterCreationScreen is never rendered and the player lands on the character sheet or dungeon select screen.",
+        "After login, if no character exists for the selected realm, the CharacterCreationScreen is shown as normal.",
+        "This behavior applies to both Softcore and Hardcore realm selections.",
+        "No 'Actor Not Available' or unhandled error is shown when a character already exists."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/engine/lootGenerator.ts",
+          "path": "frontend/src/App.tsx",
           "operation": "modify",
-          "description": "Add base physical damage property to all generated Weapon items, scaled by rarity (Common: 2-5, Uncommon: 5-10, Rare: 10-18, Legendary: 18-30) and item level. Add base defense property to all generated Armor items, scaled by rarity (Common: 1-3, Uncommon: 3-6, Rare: 6-12, Legendary: 12-20) and item level. Update the GeneratedItem type definition to include baseDamage and baseDefense fields. Ensure these base values appear in item tooltips."
-        },
-        {
-          "path": "frontend/src/engine/combatEngine.ts",
-          "operation": "modify",
-          "description": "Update the derivePlayerStats function to iterate over all equipped items (weapon, armor, trinket) and sum their base values (baseDamage for weapons, baseDefense for armor) plus all affix stats (Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance) on top of the character's base stats. Ensure this aggregation happens before any combat damage calculation. The effective stats must include the full contribution from all equipped items."
-        },
-        {
-          "path": "frontend/src/components/CharacterSheet.tsx",
-          "operation": "modify",
-          "description": "Update the stats display to show effective (aggregated) stats rather than base stats alone. Ensure the derived stats section (HP, Physical Damage, Magic Damage, Defense, Critical Chance) reflects contributions from all equipped items including base values and affixes. The displayed values must match what the combat engine uses."
-        },
-        {
-          "path": "frontend/src/types/game.ts",
-          "operation": "modify",
-          "description": "Update the GeneratedItem interface to include optional baseDamage and baseDefense fields. Add these fields to the type definition so lootGenerator can populate them and combatEngine can read them."
-        },
-        {
-          "path": "frontend/src/components/ItemTooltip.tsx",
-          "operation": "modify",
-          "description": "Update the tooltip rendering to display base physical damage for Weapon items and base defense for Armor items when present. Show these base values prominently before the affix list, e.g., 'Base Damage: 15' or 'Base Defense: 8'."
+          "description": "Add logic immediately after realm selection to query the backend for an existing character using the getCharacter() method. If a character exists for the selected realm in the current season, set the screen state to skip CharacterCreationScreen and route directly to the character sheet or dungeon select screen. Only show CharacterCreationScreen when getCharacter() returns null for the selected realm. Ensure this check happens before any screen rendering decisions and handle the query loading state appropriately to prevent flickering."
         }
       ]
     },
     {
-      "id": "REQ-24",
-      "summary": "Add prefix/suffix name generation system for monsters to create varied display names while keeping base stats unchanged",
+      "id": "REQ-31",
+      "summary": "Handle #alreadyExists error from createCharacter by silently redirecting to character sheet/dungeon select screen instead of showing error",
       "acceptanceCriteria": [
-        "No monster encounter displays only the bare base type name (e.g. 'Goblin' alone).",
-        "All 10 monster types receive prefix/suffix treatment.",
-        "Generated names feel thematically consistent with the dark fantasy setting.",
-        "Monster names with prefix/suffix appear correctly in the combat log and HP bar labels in DungeonRunScreen.",
-        "The prefix and suffix are selected randomly each time a monster is spawned."
+        "If createCharacter returns #alreadyExists, no error toast or error screen is shown.",
+        "The player is automatically routed to the character sheet or dungeon select screen.",
+        "The app does not crash or enter an unrecoverable state."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/data/monsters.ts",
+          "path": "frontend/src/App.tsx",
           "operation": "modify",
-          "description": "Define arrays for at least 8 thematic prefixes (e.g., Vile, Rotting, Ancient, Cursed, Feral, Festering, Hungering, Corrupted) and at least 6 thematic suffixes (e.g., Brute, Warden, Scout, Shaman, Ravager, Specter). Add a generateMonsterDisplayName function that takes a base monster type name and randomly combines it with a prefix and/or suffix to produce unique display names like 'Cursed Goblin Brute' or 'Ancient Troll Shaman'. Export this function for use in combatEngine."
+          "description": "Update the character creation success/error handling in App.tsx to detect when createCharacter returns a Result with err variant of type CharacterCreationError.alreadyExists. When this specific error is detected, silently redirect the player to the character sheet or dungeon select screen without displaying any error message or toast. Ensure the app gracefully handles this race condition scenario and does not crash or show confusing error states."
         },
         {
-          "path": "frontend/src/engine/combatEngine.ts",
+          "path": "frontend/src/hooks/useQueries.ts",
           "operation": "modify",
-          "description": "Update the spawnMonster function to call generateMonsterDisplayName from monsters.ts when creating a new monster instance. Store the generated display name in the monster's name field. Ensure the base stat profile remains unchanged; only the displayed name varies. The generated name must be used throughout the combat simulation."
-        },
-        {
-          "path": "frontend/src/components/DungeonRunScreen.tsx",
-          "operation": "modify",
-          "description": "Verify that the monster HP bar label and combat log entries use the monster's generated display name (which now includes prefix/suffix). No code changes should be needed if the monster name is already read from the monster instance, but confirm the display is correct."
-        }
-      ]
-    },
-    {
-      "id": "REQ-25",
-      "summary": "Expose Ticks Between Attacks as a visible stat for both player and monsters, derived from the same tick-rate logic used by the combat engine",
-      "acceptanceCriteria": [
-        "CharacterSheet shows a 'Ticks Between Attacks' stat derived from the combat engine's actual tick-rate formula.",
-        "DungeonRunScreen shows each active monster's ticks-between-attacks alongside its HP bar or combat info.",
-        "The displayed value for both player and monsters matches the interval used during live combat simulation.",
-        "Changes to Dexterity (or whichever stat governs attack speed) are reflected in the displayed ticks value."
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/engine/combatEngine.ts",
-          "operation": "modify",
-          "description": "Export a calculateTicksBetweenAttacks function that takes effective stats (for player) or a monster instance (for monsters) and returns the number of ticks between attacks. Ensure this function encapsulates the exact tick-rate formula used during combat simulation. For the player, derive the value from effective Dexterity or a fixed base modified by stat scaling. For monsters, read the value from the monster's template or instance data. This function must be the single source of truth for attack speed in the UI and in combat."
-        },
-        {
-          "path": "frontend/src/components/CharacterSheet.tsx",
-          "operation": "modify",
-          "description": "Add a 'Ticks Between Attacks' row in the derived stats section. Call the calculateTicksBetweenAttacks function from combatEngine.ts with the player's effective stats to compute the value. Display the result as an integer. Ensure this value updates when Dexterity or other relevant stats change."
-        },
-        {
-          "path": "frontend/src/components/DungeonRunScreen.tsx",
-          "operation": "modify",
-          "description": "Display each spawned monster's ticks-between-attacks value alongside its HP bar or in the combat info panel. Call the calculateTicksBetweenAttacks function from combatEngine.ts with the monster instance to compute the value. Ensure the displayed value matches the interval used during live combat simulation. Show the value as 'Attack Speed: X ticks' or similar label."
+          "description": "Update the useCreateCharacter mutation hook to properly type and expose the CharacterCreationError variants (including alreadyExists) from the backend Result type, allowing App.tsx to distinguish between different error cases. Ensure the mutation result properly surfaces the error variant so the calling code can handle #alreadyExists differently from other errors."
         }
       ]
     }

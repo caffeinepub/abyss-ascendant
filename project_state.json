@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 7,
+  "projectStateVersion": 11,
   "summary": "Full-stack browser-based real-time hack-and-slash RPG inspired by Ladder Slasher's gameplay loop. Built with React + TypeScript frontend and Motoko backend on ICP. Features Internet Identity auth, shared persistent on-chain world, ICP-based marketplace, live leaderboard, seasonal resets, hardcore/softcore realms, tick-based combat, class progression with Ascension Trials, and full itemization system.",
   "architectural_notes": [
     "Frontend: React + TypeScript with Canvas rendering for dungeon/combat screens",
@@ -201,6 +201,22 @@
         "REQ-25"
       ],
       "version": 1
+    },
+    {
+      "id": "feature-in-app-tsx-after-a-user-logs-in-and-a-realm-is-selected-query-the-backend-for-an-existing-character-for-that-realm-before-showing-any-screen-if-a-character-already-exists-for-the-selected-realm-in-the-current-season-skip-the-charactercreationscreen-entirely-and-route-the-player-directly-to-the-character-sheet-dungeon-select-screen-the-character-creation-screen-must-only-be-shown-when-no-character-exists-for-the-chosen-realm",
+      "title": "In App.tsx, after a user logs in and a realm is selected, query the backend for an existing character for that realm before showing any screen. If a character already exists for the selected realm in the current season, skip the CharacterCreationScreen entirely and route the player directly to the character sheet / dungeon select screen. The character creation screen must only be shown when no character exists for the chosen realm.",
+      "reqIds": [
+        "REQ-29"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-app-tsx-if-createcharacter-is-called-and-returns-an-alreadyexists-error-e-g-due-to-a-race-condition-or-duplicate-call-the-frontend-must-silently-redirect-the-player-to-the-character-sheet-dungeon-select-screen-rather-than-displaying-an-error-message-or-crashing",
+      "title": "In App.tsx, if createCharacter is called and returns an #alreadyExists error (e.g., due to a race condition or duplicate call), the frontend must silently redirect the player to the character sheet / dungeon select screen rather than displaying an error message or crashing.",
+      "reqIds": [
+        "REQ-31"
+      ],
+      "version": 1
     }
   ],
   "new_feature_requests": [
@@ -308,6 +324,50 @@
       "id": "AR-22",
       "summary": "Ticks Between Attacks as a visible stat on character sheet and combat UI for both player and monsters",
       "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-23",
+      "summary": "Fix routing: after login, if character already exists for selected realm, skip character creation and route directly to character sheet/dungeon screen (applies to both Softcore and Hardcore)",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-24",
+      "summary": "Replace dungeon mode selector (Catacombs/Depths) with level-input combat: player types monster level (1-100), enemy scales accordingly, XP and loot scale with level. Ascension Trial remains separately accessible. Fighting enemies 5+ levels below player applies 50% XP and 50% drop rate penalty.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-25",
+      "summary": "Fix the post-login routing logic in App.tsx so that if a character already exists for the selected realm (Softcore or Hardcore), the app skips character creation entirely and routes the player directly to the character sheet / dungeon screen. This must apply to both Softcore and Hardcore realms. The character creation screen should only appear when no character exists for the chosen realm in the current season.",
+      "reqIds": [
+        "REQ-26"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-26",
+      "summary": "Replace the dungeon mode selector screen (DungeonSelectScreen.tsx) that offers Catacombs and Depths modes with a level-input combat screen. The player types in a monster level between 1 and 100 and initiates a dungeon run against a single monster scaled to that level. Difficulty (monster HP, damage, defense), XP rewards, and loot quality must all scale proportionally with the chosen monster level. The Ascension Trial must remain accessible separately from this screen (e.g., as a distinct button or tab) and must not be replaced.",
+      "reqIds": [
+        "REQ-27"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-27",
+      "summary": "Implement an XP and drop rate penalty when the player fights a monster whose level is more than 5 levels below the player's current character level. When this condition is met, apply a 50% reduction to XP earned and a 50% reduction to the item drop rate for that run. This penalty must be calculated and applied in combatEngine.ts and/or lootGenerator.ts before results are submitted to the backend.",
+      "reqIds": [
+        "REQ-28"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-29",
+      "summary": "In the backend (main.mo), ensure the createCharacter function returns a clear #alreadyExists error variant when a character already exists for the calling principal in the selected realm and current season. The frontend must never receive an ambiguous error for this case.",
+      "reqIds": [
+        "REQ-30"
+      ],
       "status": "pending"
     }
   ],

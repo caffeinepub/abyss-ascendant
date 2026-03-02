@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { Realm } from '../backend';
-import { useCreateCharacter, CreateCharacterParams } from '../hooks/useQueries';
+import { useCreateCharacter, CreateCharacterParams, CharacterAlreadyExistsError } from '../hooks/useQueries';
 import { LocalStats } from '../hooks/useLocalCharacter';
 
 interface CharacterCreationProps {
   onComplete: (name: string, realm: Realm, allocatedStats: LocalStats) => void;
+  /** Called when the backend reports the character already exists — skip to game */
+  onAlreadyExists?: () => void;
 }
 
 const TOTAL_STAT_POINTS = 8;
 
-export default function CharacterCreation({ onComplete }: CharacterCreationProps) {
+export default function CharacterCreation({ onComplete, onAlreadyExists }: CharacterCreationProps) {
   const [name, setName] = useState('');
   const [realm, setRealm] = useState<Realm>(Realm.Softcore);
   const [stats, setStats] = useState<LocalStats>({ str: 1, dex: 1, int: 1, vit: 1 });
@@ -45,7 +47,6 @@ export default function CharacterCreation({ onComplete }: CharacterCreationProps
     }
 
     try {
-      // Pass the fully allocated stats to the backend mutation
       await createCharacterMutation.mutateAsync({
         name: name.trim(),
         realm,
@@ -55,10 +56,14 @@ export default function CharacterCreation({ onComplete }: CharacterCreationProps
         vit: stats.vit,
       });
 
-      // Only call onComplete after the backend mutation succeeds
-      // Pass the allocated stats so the local character is initialized correctly
+      // Success: initialize local character with allocated stats
       onComplete(name.trim(), realm, stats);
     } catch (err: unknown) {
+      // If the character already exists on the backend, silently redirect
+      if (err instanceof CharacterAlreadyExistsError) {
+        onAlreadyExists?.();
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'Failed to create character.';
       setError(msg);
     }

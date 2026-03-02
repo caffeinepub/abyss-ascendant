@@ -1,14 +1,11 @@
 # Specification
 
 ## Summary
-**Goal:** Fix equipment stats being applied to effective stats, add variety to monster names via prefix/suffix generation, and expose attack speed (ticks between attacks) as a visible stat for players and monsters.
+**Goal:** Fix post-login routing so that players with an existing character for a selected realm skip character creation and land directly on the character sheet/dungeon screen.
 
 **Planned changes:**
-- Add base physical damage to generated Weapon items and base defense to generated Armor items in `lootGenerator.ts`, scaled by rarity and item level.
-- Update `combatEngine.ts` player stat derivation to iterate over all equipped items and sum their base values plus all affixes on top of base character stats before combat calculations.
-- Update `CharacterSheet.tsx` to display effective stats that include all equipped item contributions, and add a "Ticks Between Attacks" row in the derived stats section.
-- Add a prefix/suffix name generation system in `monsters.ts` with at least 8 prefixes and 6 suffixes; apply randomly on each monster spawn to produce unique display names (e.g. "Cursed Goblin Brute").
-- Update `DungeonRunScreen.tsx` and combat log to display monster names with their generated prefix/suffix.
-- Derive player attack interval (ticks between attacks) from effective stats in `combatEngine.ts` and display each monster's ticks-between-attacks value alongside its HP bar in `DungeonRunScreen.tsx`.
+- In `App.tsx`, after login and realm selection, query the backend for an existing character before rendering any screen; route directly to the character sheet/dungeon select screen if one exists, otherwise show `CharacterCreationScreen` as normal
+- In `App.tsx`, if `createCharacter` returns an `#alreadyExists` error (e.g. race condition), silently redirect to the character sheet/dungeon select screen instead of showing an error or crashing
+- In `backend/main.mo`, ensure `createCharacter` returns a distinct `#alreadyExists` error variant when a character already exists for the calling principal in the selected realm and current season
 
-**User-visible outcome:** Equipping weapons and armor now meaningfully increases player damage and defense. Every monster encountered has a unique themed name. Both the character sheet and the dungeon screen show how many ticks separate each attacker's strikes.
+**User-visible outcome:** After logging in and selecting a realm, players who already have a character are taken straight to the character sheet/dungeon screen without seeing the character creation screen. New players still go through character creation as before.
