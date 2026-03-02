@@ -1,0 +1,297 @@
+export type DamageType = "physical" | "magic" | "true";
+export type AbilityArchetype =
+  | "Warrior"
+  | "Mage"
+  | "Rogue"
+  | "Universal"
+  | "melee"
+  | "ranged"
+  | "magic"
+  | "tank";
+export type EffectType = "damage" | "heal" | "buff" | "debuff" | "aoe";
+export type ClassRestriction = "Warrior" | "Rogue" | "Mage";
+
+export interface Ability {
+  id: string;
+  name: string;
+  description: string;
+  archetype: AbilityArchetype;
+  classRestriction: ClassRestriction;
+  effectType: EffectType;
+  damageType: DamageType;
+  /** Multiplier applied to the relevant damage stat when this ability fires */
+  damageMultiplier: number;
+  /** Primary stat that scales this ability */
+  scalingStat: "str" | "dex" | "int" | "vit";
+  /** @deprecated use scalingStat */
+  statScaling: "str" | "dex" | "int" | "vit" | "none";
+  cooldownTicks: number;
+  /** Cooldown in seconds (for display) */
+  cooldown: number;
+  iconColor: string;
+  /** Emoji icon for display */
+  icon: string;
+}
+
+export const ABILITIES: Ability[] = [
+  // ─── WARRIOR (5 abilities, scale with STR) ───────────────────────────────
+  {
+    id: "power_strike",
+    name: "Power Strike",
+    description:
+      "A devastating melee blow dealing 200% physical damage based on Strength.",
+    archetype: "Warrior",
+    classRestriction: "Warrior",
+    effectType: "damage",
+    damageType: "physical",
+    damageMultiplier: 2.0,
+    scalingStat: "str",
+    statScaling: "str",
+    cooldownTicks: 8,
+    cooldown: 6,
+    iconColor: "#ef4444",
+    icon: "⚔️",
+  },
+  {
+    id: "battle_cry",
+    name: "Battle Cry",
+    description:
+      "Unleash a war cry that empowers your next strike for 180% physical damage.",
+    archetype: "Warrior",
+    classRestriction: "Warrior",
+    effectType: "buff",
+    damageType: "physical",
+    damageMultiplier: 1.8,
+    scalingStat: "str",
+    statScaling: "str",
+    cooldownTicks: 10,
+    cooldown: 10,
+    iconColor: "#f97316",
+    icon: "📣",
+  },
+  {
+    id: "iron_defense",
+    name: "Iron Defense",
+    description:
+      "Brace yourself, dealing 130% physical damage while reducing incoming hits.",
+    archetype: "Warrior",
+    classRestriction: "Warrior",
+    effectType: "damage",
+    damageType: "physical",
+    damageMultiplier: 1.3,
+    scalingStat: "str",
+    statScaling: "str",
+    cooldownTicks: 7,
+    cooldown: 8,
+    iconColor: "#94a3b8",
+    icon: "🛡️",
+  },
+  {
+    id: "whirlwind",
+    name: "Whirlwind",
+    description:
+      "Spin in a deadly arc dealing 160% physical damage to all enemies.",
+    archetype: "Warrior",
+    classRestriction: "Warrior",
+    effectType: "aoe",
+    damageType: "physical",
+    damageMultiplier: 1.6,
+    scalingStat: "str",
+    statScaling: "str",
+    cooldownTicks: 9,
+    cooldown: 10,
+    iconColor: "#f97316",
+    icon: "🌀",
+  },
+  {
+    id: "berserker_rage",
+    name: "Berserker Rage",
+    description:
+      "Enter a blood frenzy, unleashing 300% physical damage in a savage assault.",
+    archetype: "Warrior",
+    classRestriction: "Warrior",
+    effectType: "damage",
+    damageType: "physical",
+    damageMultiplier: 3.0,
+    scalingStat: "str",
+    statScaling: "str",
+    cooldownTicks: 18,
+    cooldown: 20,
+    iconColor: "#dc2626",
+    icon: "💥",
+  },
+
+  // ─── ROGUE (5 abilities, scale with DEX) ─────────────────────────────────
+  {
+    id: "backstab",
+    name: "Backstab",
+    description:
+      "Strike from the shadows for 220% physical damage with a high critical chance.",
+    archetype: "Rogue",
+    classRestriction: "Rogue",
+    effectType: "damage",
+    damageType: "physical",
+    damageMultiplier: 2.2,
+    scalingStat: "dex",
+    statScaling: "dex",
+    cooldownTicks: 9,
+    cooldown: 9,
+    iconColor: "#8b5cf6",
+    icon: "🗡️",
+  },
+  {
+    id: "bleed",
+    name: "Bleed",
+    description:
+      "Open a deep wound dealing 150% physical damage and causing ongoing bleeding.",
+    archetype: "Rogue",
+    classRestriction: "Rogue",
+    effectType: "debuff",
+    damageType: "physical",
+    damageMultiplier: 1.5,
+    scalingStat: "dex",
+    statScaling: "dex",
+    cooldownTicks: 7,
+    cooldown: 8,
+    iconColor: "#ef4444",
+    icon: "🩸",
+  },
+  {
+    id: "evasion",
+    name: "Evasion",
+    description:
+      "Dodge and counter-strike for 170% physical damage with lightning reflexes.",
+    archetype: "Rogue",
+    classRestriction: "Rogue",
+    effectType: "damage",
+    damageType: "physical",
+    damageMultiplier: 1.7,
+    scalingStat: "dex",
+    statScaling: "dex",
+    cooldownTicks: 8,
+    cooldown: 9,
+    iconColor: "#22c55e",
+    icon: "💨",
+  },
+  {
+    id: "shadow_step",
+    name: "Shadow Step",
+    description:
+      "Vanish and reappear behind the enemy, striking for 190% physical damage.",
+    archetype: "Rogue",
+    classRestriction: "Rogue",
+    effectType: "damage",
+    damageType: "physical",
+    damageMultiplier: 1.9,
+    scalingStat: "dex",
+    statScaling: "dex",
+    cooldownTicks: 10,
+    cooldown: 12,
+    iconColor: "#6366f1",
+    icon: "👤",
+  },
+  {
+    id: "assassinate",
+    name: "Assassinate",
+    description:
+      "A lethal precision strike dealing 280% physical damage to a vulnerable target.",
+    archetype: "Rogue",
+    classRestriction: "Rogue",
+    effectType: "damage",
+    damageType: "physical",
+    damageMultiplier: 2.8,
+    scalingStat: "dex",
+    statScaling: "dex",
+    cooldownTicks: 16,
+    cooldown: 18,
+    iconColor: "#a855f7",
+    icon: "☠️",
+  },
+
+  // ─── MAGE (5 abilities, scale with INT) ──────────────────────────────────
+  {
+    id: "fireball",
+    name: "Fireball",
+    description:
+      "Hurl a blazing sphere of fire dealing 250% magic damage on impact.",
+    archetype: "Mage",
+    classRestriction: "Mage",
+    effectType: "damage",
+    damageType: "magic",
+    damageMultiplier: 2.5,
+    scalingStat: "int",
+    statScaling: "int",
+    cooldownTicks: 10,
+    cooldown: 8,
+    iconColor: "#f59e0b",
+    icon: "🔥",
+  },
+  {
+    id: "frost_nova",
+    name: "Frost Nova",
+    description:
+      "Explode in a burst of ice dealing 180% magic damage and slowing the enemy.",
+    archetype: "Mage",
+    classRestriction: "Mage",
+    effectType: "aoe",
+    damageType: "magic",
+    damageMultiplier: 1.8,
+    scalingStat: "int",
+    statScaling: "int",
+    cooldownTicks: 8,
+    cooldown: 9,
+    iconColor: "#06b6d4",
+    icon: "❄️",
+  },
+  {
+    id: "arcane_bolt",
+    name: "Arcane Bolt",
+    description:
+      "Fire a bolt of pure arcane energy dealing 200% magic damage, bypassing defenses.",
+    archetype: "Mage",
+    classRestriction: "Mage",
+    effectType: "damage",
+    damageType: "magic",
+    damageMultiplier: 2.0,
+    scalingStat: "int",
+    statScaling: "int",
+    cooldownTicks: 7,
+    cooldown: 7,
+    iconColor: "#a855f7",
+    icon: "✨",
+  },
+  {
+    id: "chain_lightning",
+    name: "Chain Lightning",
+    description:
+      "Call down a bolt of lightning that chains for 230% magic damage.",
+    archetype: "Mage",
+    classRestriction: "Mage",
+    effectType: "aoe",
+    damageType: "magic",
+    damageMultiplier: 2.3,
+    scalingStat: "int",
+    statScaling: "int",
+    cooldownTicks: 12,
+    cooldown: 11,
+    iconColor: "#eab308",
+    icon: "⚡",
+  },
+  {
+    id: "mana_surge",
+    name: "Mana Surge",
+    description:
+      "Channel raw magical power into a devastating 320% magic damage explosion.",
+    archetype: "Mage",
+    classRestriction: "Mage",
+    effectType: "damage",
+    damageType: "magic",
+    damageMultiplier: 3.2,
+    scalingStat: "int",
+    statScaling: "int",
+    cooldownTicks: 20,
+    cooldown: 22,
+    iconColor: "#ec4899",
+    icon: "🌟",
+  },
+];

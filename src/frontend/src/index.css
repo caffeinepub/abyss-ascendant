@@ -1,0 +1,85 @@
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Background & Surface */
+    --background: oklch(0.1 0.015 260);
+    --foreground: oklch(0.92 0.01 260);
+
+    --surface-1: oklch(0.14 0.018 260);
+    --surface-2: oklch(0.18 0.02 260);
+
+    /* Primary - ember orange */
+    --primary: oklch(0.65 0.18 40);
+    --primary-foreground: oklch(0.1 0.01 40);
+
+    /* Secondary */
+    --secondary: oklch(0.22 0.025 260);
+    --secondary-foreground: oklch(0.85 0.01 260);
+
+    /* Accent - deep violet */
+    --accent: oklch(0.55 0.2 290);
+    --accent-foreground: oklch(0.95 0.01 290);
+
+    /* Muted */
+    --muted: oklch(0.55 0.015 260);
+    --muted-foreground: oklch(0.55 0.015 260);
+
+    /* Border */
+    --border: oklch(0.25 0.02 260);
+    --input: oklch(0.2 0.018 260);
+    --ring: oklch(0.65 0.18 40);
+
+    /* Card */
+    --card: oklch(0.14 0.018 260);
+    --card-foreground: oklch(0.92 0.01 260);
+
+    /* Popover */
+    --popover: oklch(0.14 0.018 260);
+    --popover-foreground: oklch(0.92 0.01 260);
+
+    /* Destructive */
+    --destructive: oklch(0.55 0.22 25);
+    --destructive-foreground: oklch(0.95 0.01 25);
+
+    /* Health bar colors */
+    --health-high: oklch(0.6 0.18 145);
+    --health-mid: oklch(0.7 0.18 80);
+    --health-low: oklch(0.58 0.22 25);
+
+    /* Rarity colors */
+    --rarity-common: oklch(0.75 0.01 260);
+    --rarity-uncommon: oklch(0.65 0.18 145);
+    --rarity-rare: oklch(0.6 0.2 240);
+    --rarity-legendary: oklch(0.75 0.2 60);
+
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", sans-serif;
+  }
+
+  .font-display {
+    font-family: "Cinzel", serif;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
