@@ -1,61 +1,27 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Procedural Monster Generation with Stat-Based Additive XP Scaling",
+  "title": "Reduce monster defense by 80% to fix combat balance",
   "requirements": [
     {
       "id": "REQ-1",
-      "summary": "Expand monster roster with diverse prefix and suffix pools that carry stat modifiers, enabling unique procedurally generated monsters with combined stats",
+      "summary": "Reduce all monster defense/armor values by 80% in the combat engine to ensure a player with 9 strength deals meaningful damage to level 1 enemies",
       "acceptanceCriteria": [
-        "At least 10 prefixes and 10 suffixes are defined, each with a stat modifier object containing HP, attack, and defense values.",
-        "Calling the monster generation function twice produces monsters with different names and/or stats in the vast majority of cases.",
-        "A generated monster's HP, attack, and defense stats visibly reflect the combined modifiers of its prefix and suffix (e.g., 'Infernal' prefix boosts attack, 'Colossus' suffix boosts HP and defense).",
-        "Monster names displayed in combat follow the 'Prefix Suffix' pattern (e.g., 'Ancient Elder God')."
+        "Monster defense/armor values in monsters.ts (base templates and prefix/suffix modifiers) are reduced by 80%",
+        "The combat engine damage calculation in combatEngine.ts reflects reduced monster defense",
+        "A player with 9 strength deals more than 1 damage per hit against a level 1 enemy",
+        "No other monster stats (HP, attack, speed) are changed"
       ],
       "file_operations": [
         {
           "path": "frontend/src/data/monsters.ts",
           "operation": "modify",
-          "description": "Expand the existing monster data structure to include at least 10 prefixes (e.g., 'Ancient', 'Infernal', 'Cursed', 'Withered', 'Verdant', 'Dread', 'Spectral', 'Molten', 'Forsaken', 'Elder') and 10 suffixes (e.g., 'Goblin', 'Warlord', 'Shade', 'Colossus', 'Serpent', 'Revenant', 'Wraith', 'Titan', 'Fiend', 'Elder God'). Each prefix and suffix must include a stat modifier object with multipliers or flat bonuses for HP, attack, and defense. Update or replace the generateMonsterName function to select a random prefix and suffix, combine them into a 'Prefix Suffix' name pattern, and return both the name and the resolved final stats (base template stats modified by both prefix and suffix modifiers). Ensure the function produces unique combinations on each call."
-        }
-      ]
-    },
-    {
-      "id": "REQ-2",
-      "summary": "Implement additive XP formula based on monster level and equal per-point bonuses for HP, attack, and defense stats",
-      "acceptanceCriteria": [
-        "The XP formula is clearly additive: Final XP = baseXP(level) + (hpBonus * monsterHP) + (atkBonus * monsterAttack) + (defBonus * monsterDefense), where hpBonus, atkBonus, and defBonus are equal constants.",
-        "A high-defense 'Ancient Elder God' awards significantly more XP than a low-stat 'Weak Goblin' at the same monster level.",
-        "XP reward shown in the combat log and DungeonRunScreen reflects the new formula.",
-        "The bonus constants are tuned so stat contributions are meaningful but not so extreme that they overshadow level-based scaling."
-      ],
-      "file_operations": [
+          "description": "Reduce all defense/armor values in base monster templates by 80%. For each monster template in the baseMonsters array, multiply the defense stat by 0.2 (keeping 20% of the original value). Also reduce defense modifiers in prefix and suffix pools by 80% - multiply all defense bonuses by 0.2. Leave HP, attack, attackSpeed, and all non-defense stats unchanged."
+        },
         {
           "path": "frontend/src/engine/combatEngine.ts",
           "operation": "modify",
-          "description": "Replace the existing XP reward calculation with an additive formula: Final XP = baseXP(monsterLevel) + (hpBonus * monsterHP) + (atkBonus * monsterAttack) + (defBonus * monsterDefense), where hpBonus, atkBonus, and defBonus are equal constants (same per-point value). Define these constants at the top of the file with a comment explaining the additive scaling. Ensure the formula is applied in the XP reward logic so that monsters with higher HP, attack, and defense stats award significantly more XP than low-stat monsters at the same level. Tune the bonus constants so stat contributions are meaningful but balanced with level-based scaling. The calculated XP should be returned in the CombatResult and displayed in the combat log."
-        }
-      ]
-    },
-    {
-      "id": "REQ-3",
-      "summary": "Integrate procedural monster generation into dungeon runs, displaying generated monster names and stats in combat",
-      "acceptanceCriteria": [
-        "Each dungeon run generates a new monster with a procedurally combined name and stats.",
-        "The monster's full 'Prefix Suffix' name is shown in the combat log.",
-        "The combat engine receives the generated monster's final stats (HP, attack, defense) and uses them for the fight.",
-        "XP awarded at the end of the run reflects the generated monster's actual stats via the new additive formula."
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/components/DungeonSelectScreen.tsx",
-          "operation": "modify",
-          "description": "Update the dungeon start logic to call the new procedural monster generation function from frontend/src/data/monsters.ts when a dungeon run begins. Pass the selected monster level to the generation function. Store the generated monster's name and final stats (HP, attack, defense) and pass them to the DungeonRunScreen component via props or state, replacing any existing monster selection logic. Ensure the generated monster data flows into the combat engine for the fight."
-        },
-        {
-          "path": "frontend/src/components/DungeonRunScreen.tsx",
-          "operation": "modify",
-          "description": "Update the component to receive and use the procedurally generated monster data (name and stats) passed from DungeonSelectScreen. Display the generated monster's full 'Prefix Suffix' name in the combat log (e.g., 'You are battling an Infernal Titan'). Pass the generated monster's final HP, attack, and defense stats to the combat engine. Ensure the XP reward displayed at the end of the run reflects the new additive formula applied to the generated monster's actual stats."
+          "description": "Verify that the damage calculation in the combat engine correctly applies the reduced monster defense values when computing damage dealt to monsters. Ensure the damage formula uses the monster's defense stat (which will now be 80% lower) to calculate final damage. The expected behavior is that a player with 9 strength should now deal significantly more than 1 damage per hit to level 1 enemies. No changes to the damage formula itself are needed - this operation is to confirm the existing formula will work correctly with the reduced defense values from monsters.ts."
         }
       ]
     }

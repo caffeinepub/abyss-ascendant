@@ -1,48 +1,25 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-03-02T15:10:33.906Z",
+  "generatedAt": "2026-03-02T17:51:07.067Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 3,
-    "implemented": 3,
+    "total": 1,
+    "implemented": 1,
     "items": [
       {
         "id": "REQ-1",
-        "summary": "Expand the monster roster in frontend/src/data/monsters.ts to include a diverse set of prefix and suffix pools (e.g., prefixes: 'Ancient', 'Infernal', 'Cursed', 'Withered', 'Verdant', 'Dread', 'Spectral', 'Molten', 'Forsaken', 'Elder'; suffixes: 'Goblin', 'Warlord', 'Shade', 'Colossus', 'Serpent', 'Revenant', 'Wraith', 'Titan', 'Fiend', 'Elder God'). Each prefix and suffix must carry a stat modifier object (multipliers or flat bonuses for HP, attack, and defense) so that the generated monster's final stats are a combination of its base template stats and both the prefix and suffix modifiers. The `generateMonsterName` (or equivalent) utility must produce a unique monster name and resolved final stats each time it is called.",
+        "summary": "In the combat engine, reduce all monster defense/armor values by 80%. This applies to base monster stat blocks and any defense contributions from monster prefixes/suffixes. A player with 9 strength should deal meaningful damage (significantly more than 1) to level 1 enemies after this change.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/data/monsters.ts"
-        ],
-        "matchedFiles": [
-          "frontend/src/data/monsters.ts"
-        ]
-      },
-      {
-        "id": "REQ-2",
-        "summary": "Update the combat XP reward calculation in frontend/src/engine/combatEngine.ts to use an additive formula: Final XP = base XP (derived from monster level) + flat bonus per HP point + flat bonus per attack point + flat bonus per defense point. All three stat bonuses must contribute equally (same per-point bonus rate). This means a monster with high HP, high attack, AND high defense awards significantly more XP than a low-stat monster of the same level.",
-        "status": "implemented",
-        "plannedFiles": [
+          "frontend/src/data/monsters.ts",
           "frontend/src/engine/combatEngine.ts"
         ],
         "matchedFiles": [
-          "frontend/src/engine/combatEngine.ts"
-        ]
-      },
-      {
-        "id": "REQ-3",
-        "summary": "Update DungeonRunScreen and DungeonSelectScreen to use the new procedural monster generation system. When a dungeon run begins, generate a monster using the prefix+suffix system at the selected monster level, then run combat against that procedurally generated monster (with its combined stats). Display the generated monster's full name (e.g., 'Infernal Titan') in the combat log and any monster stat previews.",
-        "status": "implemented",
-        "plannedFiles": [
-          "frontend/src/components/DungeonSelectScreen.tsx",
-          "frontend/src/components/DungeonRunScreen.tsx"
-        ],
-        "matchedFiles": [
-          "frontend/src/components/DungeonSelectScreen.tsx",
-          "frontend/src/components/DungeonRunScreen.tsx"
+          "frontend/src/data/monsters.ts"
         ]
       }
     ]
@@ -52,11 +29,7 @@
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
-    "frontend/src/App.tsx",
-    "frontend/src/components/DungeonRunScreen.tsx",
-    "frontend/src/components/DungeonSelectScreen.tsx",
     "frontend/src/data/monsters.ts",
-    "frontend/src/engine/combatEngine.ts",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

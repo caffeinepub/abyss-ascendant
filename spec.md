@@ -1,12 +1,11 @@
 # Specification
 
 ## Summary
-**Goal:** Introduce procedural monster generation using prefix+suffix combinations and update XP rewards to scale additively with monster stats.
+**Goal:** Fix combat balance by reducing monster defense/armor values by 80% so players deal meaningful damage.
 
 **Planned changes:**
-- Expand `monsters.ts` with at least 10 prefixes (e.g., Ancient, Infernal, Cursed, Withered, Verdant, Dread, Spectral, Molten, Forsaken, Elder) and 10 suffixes (e.g., Goblin, Warlord, Shade, Colossus, Serpent, Revenant, Wraith, Titan, Fiend, Elder God), each carrying stat modifier objects (HP, attack, defense).
-- Add a monster generation function that combines a random prefix and suffix to produce a unique monster name and final stats (base stats + prefix modifiers + suffix modifiers).
-- Update `combatEngine.ts` XP formula to: Final XP = baseXP(level) + (equalBonus × monsterHP) + (equalBonus × monsterAttack) + (equalBonus × monsterDefense), with all three stat bonuses using the same per-point rate.
-- Update `DungeonRunScreen` and `DungeonSelectScreen` to generate a procedural monster at run start and pass its combined stats and full "Prefix Suffix" name to the combat engine and combat log.
+- Reduce all base monster defense/armor stat values by 80% in the monster templates
+- Reduce any defense/armor contributions from monster prefixes and suffixes by 80%
+- Ensure the combat damage calculation reflects the reduced monster defense
 
-**User-visible outcome:** Each dungeon run now fights a uniquely named procedural monster (e.g., "Infernal Titan"), and monsters with stronger stats award noticeably more XP than weaker ones at the same level.
+**User-visible outcome:** A player with 9 strength will deal significantly more than 1 damage per hit against level 1 enemies, making early combat feel fair and impactful.
