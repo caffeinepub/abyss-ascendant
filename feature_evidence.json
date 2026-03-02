@@ -1,0 +1,137 @@
+{
+  "kind": "feature_evidence_report",
+  "features": [
+    {
+      "featureId": "feature-fix-stat-persistence-during-character-creation-when-the-player-allocates-8-stat-points-and-confirms-creation-write-the-allocated-strength-dexterity-intelligence-and-vitality-values-directly-into-the-character-s-basestats-record-in-stable-storage-do-not-use-a-temporary-ui-only-state-object-that-gets-discarded-ensure-no-post-creation-initialization-step-overwrites-the-assigned-values-with-defaults",
+      "featureTitle": "Fix stat persistence during character creation: when the player allocates 8 stat points and confirms creation, write the allocated Strength, Dexterity, Intelligence, and Vitality values directly into the character's baseStats record in stable storage. Do not use a temporary UI-only state object that gets discarded. Ensure no post-creation initialization step overwrites the assigned values with defaults.",
+      "files": [
+        "frontend/src/components/CharacterCreation.tsx",
+        "frontend/src/hooks/useQueries.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-17"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-fix-the-ability-point-exploit-and-rework-the-ability-system-characters-start-with-exactly-1-ability-point-earn-1-ability-point-every-10-levels-so-at-level-100-a-character-has-11-total-points-each-ability-purchase-costs-1-ability-point-block-the-purchase-ui-when-availableabilitypoints-0-enforce-a-hard-cap-of-3-simultaneously-equipped-abilities-players-may-own-more-than-3-but-only-equip-3-expand-the-ability-pool-in-abilities-ts-to-approximately-15-abilities-spread-across-melee-ranged-magic-and-tank-archetypes",
+      "featureTitle": "Fix the ability point exploit and rework the ability system: characters start with exactly 1 ability point; earn +1 ability point every 10 levels (so at level 100 a character has 11 total points); each ability purchase costs 1 ability point; block the purchase UI when availableAbilityPoints == 0; enforce a hard cap of 3 simultaneously equipped abilities (players may own more than 3 but only equip 3); expand the ability pool in abilities.ts to approximately 15 abilities spread across melee, ranged, magic, and tank archetypes.",
+      "files": [
+        "frontend/src/components/AbilitySelectModal.tsx",
+        "frontend/src/components/CharacterSheet.tsx",
+        "frontend/src/data/abilities.ts",
+        "frontend/src/hooks/useLocalCharacter.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-18"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-rebalance-monster-difficulty-reduce-the-base-damage-of-all-monsters-by-approximately-10-15-and-reduce-hp-scaling-per-dungeon-level-by-approximately-10-apply-these-reductions-in-the-monster-templates-in-monsters-ts-and-in-any-scaling-logic-in-combatengine-ts-keep-encounters-challenging-but-smooth-out-the-early-progression-curve",
+      "featureTitle": "Rebalance monster difficulty: reduce the base damage of all monsters by approximately 10–15% and reduce HP scaling per dungeon level by approximately 10%. Apply these reductions in the monster templates in monsters.ts and in any scaling logic in combatEngine.ts. Keep encounters challenging but smooth out the early progression curve.",
+      "files": [
+        "frontend/src/data/monsters.ts",
+        "frontend/src/engine/combatEngine.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-19"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-restrict-the-random-item-affix-pool-in-lootgenerator-ts-to-only-the-following-valid-stats-strength-dexterity-intelligence-vitality-hp-physical-damage-magic-damage-defense-critical-chance-remove-all-other-affix-types-that-are-currently-generated-e-g-any-regen-speed-or-unrecognized-stats-apply-this-restriction-to-all-item-types-weapons-armor-and-charms-trinkets",
+      "featureTitle": "Restrict the random item affix pool in lootGenerator.ts to only the following valid stats: Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance. Remove all other affix types that are currently generated (e.g. any regen, speed, or unrecognized stats). Apply this restriction to all item types: weapons, armor, and charms/trinkets.",
+      "files": [
+        "frontend/src/components/ItemTooltip.tsx",
+        "frontend/src/engine/lootGenerator.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-20"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-reduce-the-global-item-drop-rate-by-50-in-lootgenerator-ts-this-applies-to-all-dungeon-modes-catacombs-depths-ascension-trial-and-all-monster-types-if-drops-are-determined-by-a-probability-roll-halve-that-probability-if-drops-are-determined-by-a-count-halve-the-expected-count",
+      "featureTitle": "Reduce the global item drop rate by 50% in lootGenerator.ts. This applies to all dungeon modes (Catacombs, Depths, Ascension Trial) and all monster types. If drops are determined by a probability roll, halve that probability. If drops are determined by a count, halve the expected count.",
+      "files": [
+        "frontend/src/engine/lootGenerator.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-21"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-completely-remove-the-gold-system-from-the-entire-codebase-a-backend-remove-all-gold-fields-from-character-player-records-in-main-mo-remove-any-gold-rewards-in-dungeon-result-processing-remove-gold-from-death-penalty-logic-b-frontend-remove-gold-display-from-charactersheet-navigation-and-any-other-screen-remove-gold-reward-lines-from-combat-loot-output-update-the-softcore-death-penalty-to-apply-xp-loss-only-no-gold-loss-remove-any-vendor-or-store-ui-that-requires-gold-gear-must-be-self-found-or-traded-via-the-marketplace-only",
+      "featureTitle": "Completely remove the gold system from the entire codebase: (a) backend — remove all gold fields from character/player records in main.mo, remove any gold rewards in dungeon result processing, remove gold from death penalty logic; (b) frontend — remove gold display from CharacterSheet, Navigation, and any other screen; remove gold reward lines from combat/loot output; update the Softcore death penalty to apply XP loss only (no gold loss); remove any vendor or store UI that requires gold. Gear must be self-found or traded via the marketplace only.",
+      "files": [
+        "frontend/src/components/CharacterSheet.tsx",
+        "frontend/src/components/DungeonRunScreen.tsx",
+        "frontend/src/components/DungeonSelectScreen.tsx",
+        "frontend/src/components/MarketplaceScreen.tsx",
+        "frontend/src/components/Navigation.tsx",
+        "frontend/src/engine/lootGenerator.ts",
+        "frontend/src/hooks/useLocalCharacter.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-22"
+      ],
+      "confidence": "high"
+    }
+  ]
+}

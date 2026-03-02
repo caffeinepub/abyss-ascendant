@@ -1,0 +1,167 @@
+{
+  "kind": "implementation_plan",
+  "version": "1.0",
+  "title": "Bug Fixes: Stat Persistence, Ability Points, Monster Tuning, Item Affixes, Drop Rate, Gold Removal",
+  "requirements": [
+    {
+      "id": "REQ-17",
+      "summary": "Fix stat persistence during character creation by ensuring allocated stat points are passed to backend before unmounting CharacterCreation component",
+      "acceptanceCriteria": [
+        "After completing character creation with custom stat allocation, navigating away and returning to the character sheet shows the originally assigned stat values.",
+        "Character creation in CharacterCreation.tsx passes the fully allocated stat object to the backend mutation before unmounting.",
+        "No code path resets stats to 1 or to default values after the character is created."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/components/CharacterCreation.tsx",
+          "operation": "modify",
+          "description": "Modify the character creation submission flow to pass the complete allocated stat object (Strength, Dexterity, Intelligence, Vitality) directly to the createCharacter backend mutation. Ensure the component waits for the mutation to succeed before triggering the onComplete callback. Remove any temporary UI-only state that might be discarded."
+        },
+        {
+          "path": "frontend/src/hooks/useQueries.ts",
+          "operation": "modify",
+          "description": "Update the createCharacter mutation signature and implementation to accept and forward allocated stat values (str, dex, int, vit) alongside name and realm to the backend actor. Ensure the mutation invalidates the character query cache on success."
+        }
+      ]
+    },
+    {
+      "id": "REQ-18",
+      "summary": "Fix ability point exploit and expand ability pool: start with 1 point, earn +1 every 10 levels (11 total at level 100), enforce 1-point cost per ability, cap at 3 equipped abilities, and expand ability pool to ~15 abilities",
+      "acceptanceCriteria": [
+        "A freshly created character has exactly 1 ability point.",
+        "The character sheet and backend correctly grant +1 ability point at levels 10, 20, 30, … 100 (11 total at level 100).",
+        "Attempting to purchase an ability when availableAbilityPoints is 0 is blocked — the button is disabled and no point is deducted.",
+        "AbilitySelectModal enforces a maximum of 3 equipped abilities; equipping a 4th replaces or is blocked.",
+        "The ability pool in abilities.ts contains at least 15 distinct abilities with varied archetypes (melee, ranged, magic, tank)."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/data/abilities.ts",
+          "operation": "modify",
+          "description": "Expand the abilities array from 10 to approximately 15 abilities, ensuring coverage across melee, ranged, magic, and tank archetypes. Each ability must have unique name, effect, cooldown, stat scaling, and archetype assignment."
+        },
+        {
+          "path": "frontend/src/components/AbilitySelectModal.tsx",
+          "operation": "modify",
+          "description": "Enforce the 3-equipped-ability cap: prevent equipping a 4th ability by disabling the slot selection UI or replacing an existing slot. Add UI guards that disable ability purchase buttons when availableAbilityPoints is 0. Display the available ability point count prominently."
+        },
+        {
+          "path": "frontend/src/components/CharacterSheet.tsx",
+          "operation": "modify",
+          "description": "Update the ability point calculation logic to grant exactly 1 ability point at character creation and +1 every 10 levels (e.g., at levels 10, 20, 30, …, 100). Ensure the UI correctly displays availableAbilityPoints and blocks ability purchase UI when the count is 0."
+        },
+        {
+          "path": "frontend/src/hooks/useLocalCharacter.ts",
+          "operation": "modify",
+          "description": "Adjust the local character state initialization to set abilityPoints to 1 for new characters. Ensure the ability point deduction logic subtracts exactly 1 point per ability purchase and enforces the 0 minimum. Add validation to reject purchases when availableAbilityPoints is 0."
+        }
+      ]
+    },
+    {
+      "id": "REQ-19",
+      "summary": "Rebalance monster difficulty by reducing base damage by 10–15% and HP scaling per level by 10%",
+      "acceptanceCriteria": [
+        "All 10 monster templates in monsters.ts have their base attack/damage values reduced by 10–15% compared to their previous values.",
+        "The HP scaling multiplier applied per dungeon level in the combat engine or monster scaling logic is reduced by 10%.",
+        "Level 1–10 dungeon runs are survivable for a freshly created Level 1 character with starting gear."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/data/monsters.ts",
+          "operation": "modify",
+          "description": "Reduce the base attack/damage values for all 10 monster templates by approximately 10–15%. Adjust the numeric fields in each MonsterTemplate to reflect the new lower baseline."
+        },
+        {
+          "path": "frontend/src/engine/combatEngine.ts",
+          "operation": "modify",
+          "description": "Reduce the HP scaling multiplier applied per dungeon level by 10%. Locate the monster HP calculation logic and adjust the scaling formula to apply a 0.9× multiplier to the per-level HP increase."
+        }
+      ]
+    },
+    {
+      "id": "REQ-20",
+      "summary": "Restrict random item affix pool to only the 9 valid stats: Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance",
+      "acceptanceCriteria": [
+        "Every affix generated in lootGenerator.ts maps to one of the nine listed stat keys only.",
+        "No item dropped in a dungeon run contains an affix outside this list.",
+        "ItemTooltip.tsx renders all nine affix types correctly without displaying undefined or unknown stat names."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/engine/lootGenerator.ts",
+          "operation": "modify",
+          "description": "Update the affix generation logic to draw only from the 9 valid stat keys: Strength, Dexterity, Intelligence, Vitality, +HP, +Physical Damage, +Magic Damage, +Defense, +Critical Chance. Remove any other affix types (e.g., regen, speed, or unrecognized stats) from the affix pool. Apply this restriction uniformly to weapons, armor, and trinkets."
+        },
+        {
+          "path": "frontend/src/components/ItemTooltip.tsx",
+          "operation": "modify",
+          "description": "Verify that the tooltip rendering logic correctly handles all 9 valid affix stat keys without displaying undefined or unknown stat names. Add a fallback or warning if an unrecognized affix is encountered."
+        }
+      ]
+    },
+    {
+      "id": "REQ-21",
+      "summary": "Reduce global item drop rate by 50% in lootGenerator.ts across all dungeon modes and monster types",
+      "acceptanceCriteria": [
+        "The base drop probability or drop count in lootGenerator.ts is reduced to 50% of its previous value.",
+        "The reduction applies uniformly across all dungeon modes and monster loot weight tiers.",
+        "Rare and Legendary items are not disproportionately affected — the relative rarity ratios remain the same, only the overall drop frequency is halved."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/engine/lootGenerator.ts",
+          "operation": "modify",
+          "description": "Halve the global item drop probability or drop count. If drops are determined by a probability roll, multiply the base probability by 0.5. If drops are determined by a count, multiply the expected count by 0.5. Ensure the reduction applies uniformly across all dungeon modes (Catacombs, Depths, Ascension Trial) and monster loot weight tiers without altering relative rarity ratios."
+        }
+      ]
+    },
+    {
+      "id": "REQ-22",
+      "summary": "Completely remove the gold system from the frontend: remove gold display, gold rewards, gold-based vendor/store UI, and update Softcore death penalty to XP loss only",
+      "acceptanceCriteria": [
+        "No gold amount is displayed anywhere in the frontend UI.",
+        "Dungeon completion callbacks return no gold reward; lootGenerator produces no gold drops.",
+        "Softcore death deducts a percentage of XP and shows an XP loss message; no gold loss message appears.",
+        "No vendor, shop, or store screen referencing gold exists in the app.",
+        "The marketplace screen (stub) references ICP rather than gold for any pricing labels."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/components/CharacterSheet.tsx",
+          "operation": "modify",
+          "description": "Remove all gold display elements (labels, values, icons) from the character sheet UI. Ensure no gold-related state or props are rendered."
+        },
+        {
+          "path": "frontend/src/components/Navigation.tsx",
+          "operation": "modify",
+          "description": "Remove any gold display from the top navigation bar. Ensure the user character info section no longer references or shows a gold amount."
+        },
+        {
+          "path": "frontend/src/components/DungeonRunScreen.tsx",
+          "operation": "modify",
+          "description": "Remove gold reward lines from the combat log and dungeon completion output. Ensure the dungeon result callback does not pass or display a gold amount. Update Softcore death handling to display only an XP loss message, with no gold loss reference."
+        },
+        {
+          "path": "frontend/src/engine/lootGenerator.ts",
+          "operation": "modify",
+          "description": "Remove any logic that generates gold drops from monsters. Ensure the loot generation function returns only items (weapons, armor, trinkets) with no gold amount."
+        },
+        {
+          "path": "frontend/src/components/MarketplaceScreen.tsx",
+          "operation": "modify",
+          "description": "Update all pricing labels and references in the marketplace UI from gold to ICP tokens. Ensure no gold-based transactions or balance displays remain."
+        },
+        {
+          "path": "frontend/src/hooks/useLocalCharacter.ts",
+          "operation": "modify",
+          "description": "Remove any gold field from the local character state (inventory, equipped items, stats). Ensure localStorage sync does not persist or restore a gold value."
+        },
+        {
+          "path": "frontend/src/components/DungeonSelectScreen.tsx",
+          "operation": "modify",
+          "description": "Remove any pending gold loot display from the dungeon select screen. Ensure only items are shown in the post-run loot summary."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "kind": "spec_vs_diff_report",
+  "version": "1.0",
+  "generatedAt": "2026-03-02T01:13:54.442Z",
+  "summary": "The diff implements most of the 6 required bug fixes. REQ-17 (stat persistence) is partially addressed on the frontend but the backend createCharacter function still initializes stats to hardcoded defaults (str=1, dex=1, int=1, vit=1) rather than accepting allocated stat parameters. REQ-18, REQ-19, REQ-20, REQ-21, and REQ-22 are well implemented. One hallucinated feature (backend/migration.mo) was added without being requested.",
+  "missing_requirements": [
+    {
+      "id": "REQ-17",
+      "requirement": "Write the allocated Strength, Dexterity, Intelligence, and Vitality values directly into the character's baseStats record in stable storage on the backend. No post-creation initialization step should overwrite assigned values with defaults.",
+      "reason": "In backend/main.mo, the createCharacter function still only accepts 'name' and 'realm' parameters and initializes str=1, dex=1, int=1, vit=1 as hardcoded defaults. The stats are never passed to the backend. useQueries.ts acknowledges this in a comment: 'Backend createCharacter only accepts name and realm. Stats are managed locally'. The AC requiring stats to be stored in Motoko stable variables and survive canister upgrades is not met.",
+      "evidence": [
+        "backend/main.mo",
+        "frontend/src/hooks/useQueries.ts"
+      ]
+    },
+    {
+      "id": "REQ-18",
+      "requirement": "Ability point balance is persisted in stable storage on the backend.",
+      "reason": "The backend Character record in main.mo has no abilityPoints or availableAbilityPoints field. Ability points are only tracked in localStorage on the frontend via useLocalCharacter.ts. The AC 'Ability point balance is persisted in stable storage on the backend' is not met.",
+      "evidence": [
+        "backend/main.mo",
+        "frontend/src/hooks/useLocalCharacter.ts"
+      ]
+    }
+  ],
+  "hallucinated_features": [
+    {
+      "description": "A new backend/migration.mo file was added defining OldActor/NewActor migration types and a run() migration function.",
+      "reason": "The build request does not mention or request a migration module. The constraints specify 'All Motoko changes must remain in backend/main.mo as a single actor', which this new separate file violates.",
+      "evidence": [
+        "backend/migration.mo"
+      ]
+    }
+  ],
+  "confidence": 0.88,
+  "changed_files": [
+    "backend/main.mo",
+    "backend/migration.mo",
+    "frontend-file-summaries.txt",
+    "frontend/src/App.tsx",
+    "frontend/src/components/AbilitySelectModal.tsx",
+    "frontend/src/components/CharacterCreation.tsx",
+    "frontend/src/components/CharacterSheet.tsx",
+    "frontend/src/components/DungeonRunScreen.tsx",
+    "frontend/src/components/DungeonSelectScreen.tsx",
+    "frontend/src/components/InventoryScreen.tsx",
+    "frontend/src/components/ItemTooltip.tsx",
+    "frontend/src/components/LeaderboardScreen.tsx",
+    "frontend/src/components/MarketplaceScreen.tsx",
+    "frontend/src/components/Navigation.tsx",
+    "frontend/src/data/abilities.ts",
+    "frontend/src/data/monsters.ts",
+    "frontend/src/engine/combatEngine.ts",
+    "frontend/src/engine/lootGenerator.ts",
+    "frontend/src/hooks/useLocalCharacter.ts",
+    "frontend/src/hooks/useQueries.ts",
+    "project_state.json"
+  ]
+}
