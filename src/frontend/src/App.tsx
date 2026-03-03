@@ -1,4 +1,3 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { useState, useCallback, useEffect } from "react";
 import type { Character } from "./backend";
 import type { GeneratedMonster } from "./data/monsters";
@@ -38,8 +37,6 @@ import MarketplaceScreen from "./components/MarketplaceScreen";
 import Navigation, { type NavScreen } from "./components/Navigation";
 import ProfessionsPlaceholder from "./components/ProfessionsPlaceholder";
 import ShrinesPlaceholder from "./components/ShrinesPlaceholder";
-
-const queryClient = new QueryClient();
 
 function AppContent() {
   const { identity, isInitializing } = useInternetIdentity();
@@ -769,9 +766,5 @@ function AppFooter() {
 }
 
 export default function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AppContent />
-    </QueryClientProvider>
-  );
+  return <AppContent />;
 }
