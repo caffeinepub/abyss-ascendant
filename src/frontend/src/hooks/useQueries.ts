@@ -18,7 +18,7 @@ export class CharacterLimitReachedError extends Error {
 }
 
 export function useGetCharacters() {
-  const { actor, isFetching } = useActor();
+  const { actor } = useActor();
 
   return useQuery<Character[]>({
     queryKey: ["characters"],
@@ -26,12 +26,17 @@ export function useGetCharacters() {
       if (!actor) return [];
       return actor.getCharacters();
     },
-    enabled: !!actor && !isFetching,
+    // Gate only on actor presence — isFetching guard caused a race condition
+    // where the query never fired if the actor resolved during a refetch cycle.
+    enabled: !!actor,
+    // Always re-fetch when the component mounts to pick up on-chain state
+    refetchOnMount: true,
+    staleTime: 0,
   });
 }
 
 export function useGetCharacter(characterId: CharacterId | null) {
-  const { actor, isFetching } = useActor();
+  const { actor } = useActor();
 
   return useQuery<Character | null>({
     queryKey: ["character", characterId],
@@ -39,12 +44,12 @@ export function useGetCharacter(characterId: CharacterId | null) {
       if (!actor || characterId === null) return null;
       return actor.getCharacter(characterId);
     },
-    enabled: !!actor && !isFetching && characterId !== null,
+    enabled: !!actor && characterId !== null,
   });
 }
 
 export function useCreateCharacter() {
-  const { actor } = useActor();
+  const { actor: _actor } = useActor();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -58,6 +63,8 @@ export function useCreateCharacter() {
       vit: bigint;
       equippedAbilities: Ability[];
     }) => {
+      // Re-read actor from the query cache at call time to avoid stale closure.
+      const actor = _actor;
       if (!actor) throw new Error("Actor not available");
       const result = await actor.createCharacter(params);
       if (result.__kind__ === "err") {

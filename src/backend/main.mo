@@ -309,8 +309,8 @@ actor {
         vit = params.vit;
       };
       advancedStats = {
-        maxHP = 20;
-        currentHP = 20;
+        maxHP = Nat.max(10, params.vit * 10 + 50);
+        currentHP = Nat.max(10, params.vit * 10 + 50);
         critChance = 5;
         critPower = 10;
       };

@@ -25,9 +25,6 @@ export default function XPBar({ level, xp, compact = false }: XPBarProps) {
             style={{ width: `${progress}%` }}
           />
         </div>
-        <span className="text-xs text-muted-foreground">
-          {Math.floor(progress)}%
-        </span>
       </div>
     );
   }

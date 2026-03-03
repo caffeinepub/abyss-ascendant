@@ -2,8 +2,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { useState, useCallback, useEffect } from "react";
 import type { Character } from "./backend";
 import type { GeneratedMonster } from "./data/monsters";
-import type { CombatResult } from "./engine/combatEngine";
+import {
+  type CombatResult,
+  type CombatStats,
+  simulateCombat,
+} from "./engine/combatEngine";
 import type { GeneratedItem } from "./engine/lootGenerator";
+import { useActor } from "./hooks/useActor";
 import { useHealthRegen } from "./hooks/useHealthRegen";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useLocalCharacter } from "./hooks/useLocalCharacter";
@@ -39,6 +44,7 @@ const queryClient = new QueryClient();
 function AppContent() {
   const { identity, isInitializing } = useInternetIdentity();
   const isAuthenticated = !!identity;
+  const { actor, isFetching: actorFetching } = useActor();
 
   const [selectedCharacterIndex, setSelectedCharacterIndex] = useState<
     number | null
@@ -57,6 +63,8 @@ function AppContent() {
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [pendingLevelUp, setPendingLevelUp] = useState(false);
   const [isSavingHp, setIsSavingHp] = useState(false);
+  const [preComputedCombatResult, setPreComputedCombatResult] =
+    useState<CombatResult | null>(null);
 
   const {
     data: rawCharacters = [],
@@ -64,6 +72,15 @@ function AppContent() {
     isError: charsError,
     refetch: refetchChars,
   } = useGetCharacters();
+
+  // Ensure characters are fetched once the authenticated actor is ready.
+  // This is a safety-net for race conditions where the query fires before
+  // the actor has finished initialising.
+  useEffect(() => {
+    if (isAuthenticated && actor && !actorFetching) {
+      refetchChars();
+    }
+  }, [isAuthenticated, actor, actorFetching, refetchChars]);
   const setCharacterHpMutation = useSetCharacterHp();
   const spendStatPointsMutation = useSpendStatPoints();
   const updateStatsMutation = useUpdateStats();
@@ -165,11 +182,46 @@ function AppContent() {
   const handleStartDungeon = useCallback(
     (mode: DungeonMode, level: number, monsters?: GeneratedMonster[]) => {
       setDungeonLevel(level);
-      setDungeonMode(mode === "AscensionTrial" ? "hardcore" : "normal");
-      setPendingMonsters(monsters ?? []);
+      const isHardcore = mode === "AscensionTrial";
+      setDungeonMode(isHardcore ? "hardcore" : "normal");
+      const resolvedMonsters = monsters ?? [];
+      setPendingMonsters(resolvedMonsters);
+
+      // Pre-compute combat result immediately so DungeonRunScreen can start
+      // animating the log without any async delay.
+      if (character) {
+        const combatAbilities =
+          character.equippedAbilities.length > 0
+            ? character.equippedAbilities
+            : character.abilities;
+        const combatStats: CombatStats = {
+          str: character.stats.str,
+          dex: character.stats.dex,
+          int: character.stats.int,
+          vit: character.stats.vit,
+          maxHp: character.stats.maxHp,
+          currentHp: character.stats.currentHp,
+          critChance: character.stats.critChance,
+          critPower: character.stats.critPower,
+          equippedItems: character.equippedItems,
+          abilities: combatAbilities,
+          characterClass: character.class,
+        };
+        const result = simulateCombat(
+          combatStats,
+          level,
+          isHardcore,
+          character.realm,
+          resolvedMonsters.length > 0 ? resolvedMonsters : undefined,
+        );
+        setPreComputedCombatResult(result);
+      } else {
+        setPreComputedCombatResult(null);
+      }
+
       setIsInDungeon(true);
     },
-    [],
+    [character],
   );
 
   const handleDungeonComplete = useCallback(
@@ -181,6 +233,7 @@ function AppContent() {
     ) => {
       setIsInDungeon(false);
       setPendingMonsters([]);
+      setPreComputedCombatResult(null);
 
       // Write inventory to localStorage synchronously BEFORE firing any
       // mutations that trigger query invalidation / re-fetches — this
@@ -243,6 +296,7 @@ function AppContent() {
   const handleDungeonDeath = useCallback(() => {
     setIsInDungeon(false);
     setPendingMonsters([]);
+    setPreComputedCombatResult(null);
     setSelectedCharacterIndex(null);
     setCurrentScreen("character");
     refetchChars();
@@ -366,13 +420,16 @@ function AppContent() {
         <div className="min-h-screen bg-surface-1">
           <CharacterCreation
             existingCharacters={rawCharacters}
-            onCharacterCreated={(characterId) => {
-              refetchChars();
-              setShowCharacterCreation(false);
-              // Select the newly created character by index
-              if (typeof characterId === "number") {
-                handleSelectCharacter(characterId);
+            onCharacterCreated={async () => {
+              // Refetch to get updated character list, then select the newest
+              // character (last in array). Using the backend character ID as an
+              // array index was the v52 regression — backend IDs are not indices.
+              const result = await refetchChars();
+              const freshChars = result.data ?? rawCharacters;
+              if (freshChars.length > 0) {
+                handleSelectCharacter(freshChars.length - 1);
               }
+              setShowCharacterCreation(false);
             }}
             onCancel={() => setShowCharacterCreation(false)}
           />
@@ -483,6 +540,7 @@ function AppContent() {
           dungeonLevel={dungeonLevel}
           dungeonMode={dungeonMode}
           monsters={pendingMonsters.length > 0 ? pendingMonsters : undefined}
+          preComputedResult={preComputedCombatResult ?? undefined}
           onComplete={handleDungeonComplete}
           onDeath={handleDungeonDeath}
         />
@@ -508,6 +566,7 @@ function AppContent() {
         characterRealm={character?.realm}
         currentHP={character?.stats.currentHp}
         maxHP={character?.stats.maxHp}
+        characterXp={character?.xp}
         onBackToCharacterSelect={handleBackToCharacterSelect}
         isSavingHp={isSavingHp}
       />

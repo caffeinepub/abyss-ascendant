@@ -22,6 +22,7 @@ interface DungeonRunScreenProps {
   dungeonLevel: number;
   dungeonMode: "normal" | "hardcore";
   monsters?: GeneratedMonster[];
+  preComputedResult?: CombatResult;
   onComplete: (
     result: CombatResult,
     newXp: number,
@@ -39,6 +40,7 @@ export default function DungeonRunScreen({
   dungeonLevel,
   dungeonMode,
   monsters,
+  preComputedResult,
   onComplete,
   onDeath,
 }: DungeonRunScreenProps) {
@@ -67,11 +69,22 @@ export default function DungeonRunScreen({
   const initialDungeonLevelRef = useRef(dungeonLevel);
   const initialDungeonModeRef = useRef(dungeonMode);
   const initialMonstersRef = useRef(monsters);
+  const initialPreComputedRef = useRef(preComputedResult);
 
   // Start combat immediately on mount
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
+
+    // If a result was pre-computed in App before navigation, use it directly
+    // to eliminate the async startup delay.
+    if (initialPreComputedRef.current) {
+      setCombatResult(initialPreComputedRef.current);
+      setDisplayedLog([]);
+      setLogIndex(0);
+      setPhase("running");
+      return;
+    }
 
     const char = initialCharacterRef.current;
     const level = initialDungeonLevelRef.current;

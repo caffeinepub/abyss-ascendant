@@ -31,7 +31,7 @@ import {
 import { type CharacterClass, applyClassStatBonus } from "../types/game";
 
 interface CharacterCreationProps {
-  onCharacterCreated: (characterId: number) => void;
+  onCharacterCreated: (characterId: number) => void | Promise<void>;
   onBack?: () => void;
   existingCharacters?: Character[];
   onCancel?: () => void;

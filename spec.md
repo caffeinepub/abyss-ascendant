@@ -1,31 +1,27 @@
 # Abyss Ascendant
 
 ## Current State
-Character creation is a 2-step flow: (1) Choose Class, (2) Character Details (name, realm, stats). After creation the player lands on the Character Sheet where they can open the AbilitySelectModal to equip abilities. At level 1 the player has 1 ability point. The bug is that new players miss this step entirely — the ability selection is a post-creation screen that is easy to overlook. There were also reports that Rogue and Mage abilities could not be purchased at level 1 (likely due to the flow being missed, not a logic bug in the modal itself).
+- XPBar component has a "compact" variant used in Navigation.tsx that shows a filled progress bar BUT also renders `{Math.floor(progress)}%` text next to it
+- DungeonRunScreen starts combat simulation synchronously on mount (no delay there), but the `handleContinue` function calls `submitDungeonResult.mutate` and `setCharacterHp.mutate` (backend ICP update calls) — these are fire-and-forget but the ~10 second delay is likely caused by `handleStartDungeon` in App.tsx triggering a state change that re-renders DungeonRunScreen, which involves backend query calls before showing anything OR it's waiting on the `useActor` hook to re-initialize
+- The combat simulation itself runs synchronously in `useEffect` on mount, so the log should appear immediately — the delay may be coming from the App.tsx rendering cycle awaiting actor availability, or from the dungeon screen mount being delayed by React reconciliation after navigation
 
 ## Requested Changes (Diff)
 
 ### Add
-- Step 3 "Choose Your Ability" in the CharacterCreation flow, inserted between Step 2 (Details) and the final Create button
-- The new step displays all 5 class abilities for the selected class as selectable cards
-- Player must select exactly 1 ability before they can create the character (they have 1 ability point at level 1)
-- Selected ability is passed to `createCharacterMutation` as the initial `equippedAbilities` array
-- Selected ability is also saved to localStorage via `saveStarterEquipmentForCharacter` so it persists immediately
-- Step indicator updated from 2 steps to 3 steps (Choose Class → Details → Choose Ability)
+- Nothing new
 
 ### Modify
-- `CharacterCreation.tsx`: Add `"ability"` to `CreationStep` type; add step 3 UI and logic; pass selected ability on creation; update step indicators
-- `useLocalCharacter.ts` / `saveStarterEquipmentForCharacter`: Accept optional initial equipped abilities so they are stored alongside starter equipment
+1. **XPBar.tsx compact variant**: Remove the `{Math.floor(progress)}%` percentage text. Replace with a cleaner label showing `{xpIntoLevel} / {xpNeeded} XP` in smaller text, or simply widen the bar so the visual speaks for itself. No percentage anywhere.
+2. **DungeonRunScreen.tsx**: Pre-compute the combat result BEFORE transitioning to the dungeon screen, so by the time the component mounts, the result is already available and the log animation begins instantly. Pass the pre-computed result as a prop. This eliminates the React mount → useEffect → simulateCombat → setState cycle delay.
+   - In App.tsx `handleStartDungeon`: run `simulateCombat` with character stats immediately and pass the result to DungeonRunScreen
+   - In DungeonRunScreen: accept an optional `preComputedResult` prop; if provided, initialize state from it directly (skip the useEffect combat simulation)
+   - Backend calls (submitDungeonResult, setCharacterHp) remain async fire-and-forget — no change
 
 ### Remove
-- Nothing removed
+- The `{Math.floor(progress)}%` text from the compact XPBar variant
 
 ## Implementation Plan
-1. Add `"ability"` to `CreationStep` type in CharacterCreation.tsx
-2. Add `selectedAbility` state (single ability name or null)
-3. Update step indicators to show 3 steps
-4. Add "Continue to Ability" button at the end of Step 2 (after the existing details form), replacing the current "Create Character" button
-5. Add Step 3 UI: show all 5 class abilities as clickable cards with icon, name, description, and damage info; one must be selected to enable creation
-6. "Create Character" button moves to Step 3 footer, enabled only when an ability is selected
-7. On creation, pass `[selectedAbility]` as initial `equippedAbilities` to the backend mutation AND save to localStorage
-8. Update `saveStarterEquipmentForCharacter` to accept an optional `initialAbilities` parameter so abilities are stored at the same time as starter equipment
+1. Edit `XPBar.tsx`: In the compact branch, remove the `<span>` that renders `{Math.floor(progress)}%`. Optionally add a small `xpIntoLevel/xpNeeded` label if it fits, otherwise just show bar + level.
+2. Edit `App.tsx`: In `handleStartDungeon`, compute combat result immediately using `simulateCombat` with current character stats. Store it in state (`preComputedCombatResult`). Pass it to `DungeonRunScreen`.
+3. Edit `DungeonRunScreen.tsx`: Accept `preComputedResult?: CombatResult` prop. In the mount useEffect, if `preComputedResult` is provided, use it directly instead of calling `simulateCombat`. This removes the computation lag from the dungeon screen mount.
+4. Typecheck and build to confirm no regressions.

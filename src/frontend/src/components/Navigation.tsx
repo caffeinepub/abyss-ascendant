@@ -13,6 +13,7 @@ import {
 import type React from "react";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import HealthBar from "./HealthBar";
+import XPBar from "./XPBar";
 
 export type NavScreen =
   | "character"
@@ -31,6 +32,7 @@ interface NavigationProps {
   characterRealm?: string;
   currentHP?: number;
   maxHP?: number;
+  characterXp?: number;
   onBackToCharacterSelect: () => void;
   isSavingHp?: boolean;
 }
@@ -82,6 +84,7 @@ export default function Navigation({
   characterRealm,
   currentHP,
   maxHP,
+  characterXp,
   onBackToCharacterSelect,
   isSavingHp = false,
 }: NavigationProps) {
@@ -171,6 +174,9 @@ export default function Navigation({
               </div>
               {showHealthBar && (
                 <HealthBar currentHP={currentHP!} maxHP={maxHP!} compact />
+              )}
+              {characterLevel !== undefined && characterXp !== undefined && (
+                <XPBar level={characterLevel} xp={characterXp} compact />
               )}
             </>
           )}
