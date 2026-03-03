@@ -123,7 +123,7 @@ export default function DungeonRunScreen({
     setPhase("running");
   }, []);
 
-  // Animate log lines
+  // Animate log lines — batch multiple lines per tick so combat resolves fast
   useEffect(() => {
     if (phase !== "running" || !combatResult) return;
     if (logIndex >= combatResult.log.length) {
@@ -135,10 +135,19 @@ export default function DungeonRunScreen({
       }
       return;
     }
+    // Show 5 lines at a time every 30ms so a 100-line fight resolves in ~0.6s
+    const LINES_PER_TICK = 5;
     const timer = setTimeout(() => {
-      setDisplayedLog((prev) => [...prev, combatResult.log[logIndex]]);
-      setLogIndex((prev) => prev + 1);
-    }, 80);
+      const nextIndex = Math.min(
+        logIndex + LINES_PER_TICK,
+        combatResult.log.length,
+      );
+      setDisplayedLog((prev) => [
+        ...prev,
+        ...combatResult.log.slice(logIndex, nextIndex),
+      ]);
+      setLogIndex(nextIndex);
+    }, 30);
     return () => clearTimeout(timer);
   }, [phase, combatResult, logIndex]);
 

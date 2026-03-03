@@ -62,6 +62,11 @@ function AppContent() {
   const [isSavingHp, setIsSavingHp] = useState(false);
   const [preComputedCombatResult, setPreComputedCombatResult] =
     useState<CombatResult | null>(null);
+  // Snapshot of the character at the moment dungeon entry is triggered.
+  // Keeping this separate from `character` means DungeonRunScreen won't
+  // unmount if a background refetch temporarily clears the live character.
+  const [dungeonCharacterSnapshot, setDungeonCharacterSnapshot] =
+    useState<LocalCharacter | null>(null);
 
   const {
     data: rawCharacters = [],
@@ -178,43 +183,44 @@ function AppContent() {
 
   const handleStartDungeon = useCallback(
     (mode: DungeonMode, level: number, monsters?: GeneratedMonster[]) => {
+      if (!character) return; // can't enter dungeon without a character
       setDungeonLevel(level);
       const isHardcore = mode === "AscensionTrial";
       setDungeonMode(isHardcore ? "hardcore" : "normal");
       const resolvedMonsters = monsters ?? [];
       setPendingMonsters(resolvedMonsters);
 
+      // Snapshot the character NOW so DungeonRunScreen always has a stable
+      // reference even if a background refetch temporarily clears `character`.
+      setDungeonCharacterSnapshot(character);
+
       // Pre-compute combat result immediately so DungeonRunScreen can start
       // animating the log without any async delay.
-      if (character) {
-        const combatAbilities =
-          character.equippedAbilities.length > 0
-            ? character.equippedAbilities
-            : character.abilities;
-        const combatStats: CombatStats = {
-          str: character.stats.str,
-          dex: character.stats.dex,
-          int: character.stats.int,
-          vit: character.stats.vit,
-          maxHp: character.stats.maxHp,
-          currentHp: character.stats.currentHp,
-          critChance: character.stats.critChance,
-          critPower: character.stats.critPower,
-          equippedItems: character.equippedItems,
-          abilities: combatAbilities,
-          characterClass: character.class,
-        };
-        const result = simulateCombat(
-          combatStats,
-          level,
-          isHardcore,
-          character.realm,
-          resolvedMonsters.length > 0 ? resolvedMonsters : undefined,
-        );
-        setPreComputedCombatResult(result);
-      } else {
-        setPreComputedCombatResult(null);
-      }
+      const combatAbilities =
+        character.equippedAbilities.length > 0
+          ? character.equippedAbilities
+          : character.abilities;
+      const combatStats: CombatStats = {
+        str: character.stats.str,
+        dex: character.stats.dex,
+        int: character.stats.int,
+        vit: character.stats.vit,
+        maxHp: character.stats.maxHp,
+        currentHp: character.stats.currentHp,
+        critChance: character.stats.critChance,
+        critPower: character.stats.critPower,
+        equippedItems: character.equippedItems,
+        abilities: combatAbilities,
+        characterClass: character.class,
+      };
+      const result = simulateCombat(
+        combatStats,
+        level,
+        isHardcore,
+        character.realm,
+        resolvedMonsters.length > 0 ? resolvedMonsters : undefined,
+      );
+      setPreComputedCombatResult(result);
 
       setIsInDungeon(true);
     },
@@ -231,6 +237,7 @@ function AppContent() {
       setIsInDungeon(false);
       setPendingMonsters([]);
       setPreComputedCombatResult(null);
+      setDungeonCharacterSnapshot(null);
 
       // Write inventory to localStorage synchronously BEFORE firing any
       // mutations that trigger query invalidation / re-fetches — this
@@ -294,6 +301,7 @@ function AppContent() {
     setIsInDungeon(false);
     setPendingMonsters([]);
     setPreComputedCombatResult(null);
+    setDungeonCharacterSnapshot(null);
     setSelectedCharacterIndex(null);
     setCurrentScreen("character");
     refetchChars();
@@ -527,12 +535,16 @@ function AppContent() {
     );
   }
 
-  // In dungeon run
-  if (isInDungeon && character && selectedCharacterIndex !== null) {
+  // In dungeon run — use the snapshot so a background refetch can't unmount this screen
+  if (
+    isInDungeon &&
+    dungeonCharacterSnapshot &&
+    selectedCharacterIndex !== null
+  ) {
     return (
       <div className="min-h-screen bg-surface-1">
         <DungeonRunScreen
-          character={character}
+          character={dungeonCharacterSnapshot}
           characterId={selectedCharacterIndex}
           dungeonLevel={dungeonLevel}
           dungeonMode={dungeonMode}
