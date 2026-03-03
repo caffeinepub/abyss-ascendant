@@ -34,12 +34,12 @@ export default function AbilitySelectModal({
     validEquipped.slice(0, MAX_EQUIPPED),
   );
 
-  const totalAbilityPoints = Math.min(
-    calculateAvailableAbilityPoints(character.level),
-    MAX_EQUIPPED,
-  );
+  // Total ability points the character has earned (1 at level 1, +1 every 20 levels up to 5)
+  const totalAbilityPoints = calculateAvailableAbilityPoints(character.level);
+  // How many abilities are currently selected/equipped
   const usedPoints = selectedAbilities.length;
-  const availablePoints = totalAbilityPoints - usedPoints;
+  // Remaining points to spend — never goes below 0
+  const availablePoints = Math.max(0, totalAbilityPoints - usedPoints);
 
   const handleToggleAbility = (abilityName: string) => {
     const isSelected = selectedAbilities.includes(abilityName);
@@ -62,7 +62,8 @@ export default function AbilitySelectModal({
   };
 
   const handleConfirm = () => {
-    onConfirm(selectedAbilities);
+    // Only pass up to MAX_EQUIPPED abilities to equip at a time
+    onConfirm(selectedAbilities.slice(0, MAX_EQUIPPED));
   };
 
   const getAbilityByName = (name: string): Ability | undefined =>
@@ -100,7 +101,7 @@ export default function AbilitySelectModal({
             </span>
           </div>
           <div className="text-sm text-muted-foreground">
-            {usedPoints} / {totalAbilityPoints} slots used
+            {usedPoints} / {Math.min(totalAbilityPoints, MAX_EQUIPPED)} equipped
           </div>
           <div className="text-xs text-muted-foreground ml-auto">
             12.5% trigger chance per round
