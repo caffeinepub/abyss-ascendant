@@ -124,8 +124,8 @@ export default function ItemTooltip({
       {/* Affixes */}
       {item.affixes.length > 0 && (
         <div className="space-y-1 border-t border-border/50 pt-2">
-          {item.affixes.map((affix) => (
-            <AffixLine key={affix.stat} affix={affix} />
+          {item.affixes.map((affix, i) => (
+            <AffixLine key={`${affix.stat}-${i}`} affix={affix} />
           ))}
         </div>
       )}
@@ -186,12 +186,12 @@ export function ItemCard({
 
       {item.affixes.length > 0 && (
         <div className="mt-1 space-y-0.5">
-          {item.affixes.map((affix) => {
+          {item.affixes.map((affix, i) => {
             const display = STAT_DISPLAY[affix.stat];
             const suffix = affix.stat === "critChance" ? "%" : "";
             return (
               <div
-                key={affix.stat}
+                key={`${affix.stat}-${i}`}
                 className={`text-xs ${display?.color ?? "text-muted-foreground"}`}
               >
                 +{affix.value}

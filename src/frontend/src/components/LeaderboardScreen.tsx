@@ -102,13 +102,20 @@ export default function LeaderboardScreen({
   const entries = activeRealm === "Softcore" ? MOCK_SOFTCORE : MOCK_HARDCORE;
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-4">
+    <div className="max-w-4xl mx-auto p-4 space-y-4 animate-fade-in">
       {/* Header */}
-      <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-center gap-3">
-          <Trophy className="w-6 h-6 text-amber-400" />
+      <div className="panel-gold rounded-xl p-5 relative overflow-hidden">
+        <div
+          className="absolute top-0 right-0 w-48 h-24 pointer-events-none opacity-10"
+          style={{
+            background:
+              "radial-gradient(ellipse at top right, oklch(0.72 0.14 72), transparent)",
+          }}
+        />
+        <div className="flex items-center gap-3 relative">
+          <Trophy className="w-6 h-6 text-dungeon-gold flex-shrink-0 animate-gold-shimmer" />
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="font-display text-2xl font-bold text-foreground">
               Eternal Ladder
             </h1>
             <p className="text-muted-foreground text-sm mt-0.5">
@@ -124,19 +131,25 @@ export default function LeaderboardScreen({
           <button
             type="button"
             key={realm}
+            data-ocid={`leaderboard.${realm.toLowerCase()}.tab`}
             onClick={() => setActiveRealm(realm)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               activeRealm === realm
                 ? realm === "Hardcore"
-                  ? "bg-red-500/20 text-red-400 border border-red-500/40"
-                  : "bg-primary/20 text-primary border border-primary/40"
-                : "bg-card border border-border text-muted-foreground hover:text-foreground"
+                  ? "bg-destructive/15 text-destructive border border-destructive/40"
+                  : "border border-primary/40 text-primary"
+                : "bg-surface-1 border border-border/50 text-muted-foreground hover:text-foreground"
             }`}
+            style={
+              activeRealm === realm && realm === "Softcore"
+                ? { background: "oklch(0.65 0.17 38 / 0.15)" }
+                : {}
+            }
           >
             {realm === "Hardcore" ? (
-              <Skull className="w-4 h-4" />
+              <Skull className="w-3.5 h-3.5" />
             ) : (
-              <Shield className="w-4 h-4" />
+              <Shield className="w-3.5 h-3.5" />
             )}
             {realm}
           </button>
@@ -144,21 +157,20 @@ export default function LeaderboardScreen({
       </div>
 
       {/* Notice */}
-      <div className="bg-card border border-border rounded-xl p-3 text-xs text-muted-foreground">
-        <span className="text-amber-400">⚠</span> Leaderboard shows top
-        adventurers. Rankings update as players progress. Season resets wipe all
-        rankings.
+      <div className="panel rounded-lg px-4 py-3 text-xs text-muted-foreground/70">
+        <span className="text-dungeon-gold">⚠</span> Rankings update as players
+        progress. Season resets wipe all rankings.
         {activeRealm === "Hardcore" && (
-          <span className="text-red-400 ml-1">
+          <span className="text-health-low/70 ml-1">
             Fallen Hardcore characters remain until season reset.
           </span>
         )}
       </div>
 
       {/* Rankings */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="panel rounded-xl overflow-hidden">
         {/* Header row */}
-        <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="grid grid-cols-12 gap-2 px-4 py-2.5 border-b border-border/60 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest bg-surface-2/50">
           <div className="col-span-1">#</div>
           <div className="col-span-4">Adventurer</div>
           <div className="col-span-2">Class</div>
@@ -177,46 +189,51 @@ export default function LeaderboardScreen({
           return (
             <div
               key={entry.name}
-              className={`grid grid-cols-12 gap-2 px-4 py-3 border-b border-border/50 text-sm transition-colors ${
-                isCurrentUser ? "bg-primary/10" : "hover:bg-muted/30"
-              } ${isDead ? "opacity-60" : ""}`}
+              data-ocid={`leaderboard.item.${i + 1}`}
+              className={`grid grid-cols-12 gap-2 px-4 py-3 border-b border-border/30 text-sm transition-colors ${
+                isCurrentUser ? "bg-primary/8" : "hover:bg-surface-2/60"
+              } ${isDead ? "opacity-50" : ""}`}
             >
               {/* Rank */}
               <div className="col-span-1 flex items-center">
                 {i === 0 ? (
-                  <span className="text-amber-400 font-bold text-base">👑</span>
+                  <span className="text-dungeon-gold text-base animate-gold-shimmer">
+                    👑
+                  </span>
                 ) : i === 1 ? (
-                  <span className="text-muted-foreground font-bold">2</span>
+                  <span className="text-foreground/50 font-bold text-sm">
+                    2
+                  </span>
                 ) : i === 2 ? (
-                  <span className="text-orange-400 font-bold">3</span>
+                  <span className="text-ember/70 font-bold text-sm">3</span>
                 ) : (
-                  <span className="text-muted-foreground">{i + 1}</span>
+                  <span className="text-muted-foreground/50 text-sm">
+                    {i + 1}
+                  </span>
                 )}
               </div>
 
               {/* Name */}
               <div className="col-span-4 flex items-center gap-2">
                 <span
-                  className={`font-semibold ${
-                    isCurrentUser ? "text-primary" : "text-foreground"
-                  }`}
+                  className={`font-semibold ${isCurrentUser ? "text-primary" : "text-foreground"}`}
                 >
                   {entry.name}
                 </span>
                 {isCurrentUser && (
-                  <span className="text-xs text-primary">(you)</span>
+                  <span className="text-xs text-primary/60">(you)</span>
                 )}
               </div>
 
               {/* Class */}
               <div className="col-span-2 flex items-center">
-                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                <span className="text-xs px-2 py-0.5 rounded-md bg-primary/8 text-primary/70 border border-primary/20">
                   {tierName}
                 </span>
               </div>
 
               {/* Level */}
-              <div className="col-span-2 text-center text-muted-foreground">
+              <div className="col-span-2 text-center text-muted-foreground text-sm">
                 {entry.level}
               </div>
 
@@ -228,11 +245,11 @@ export default function LeaderboardScreen({
               {/* Status */}
               <div className="col-span-1 text-right">
                 {isDead ? (
-                  <span className="text-red-400" title="Fallen">
+                  <span className="text-health-low/70" title="Fallen">
                     ☠
                   </span>
                 ) : (
-                  <span className="text-green-400" title="Alive">
+                  <span className="text-health-high" title="Alive">
                     ●
                   </span>
                 )}
@@ -242,16 +259,18 @@ export default function LeaderboardScreen({
         })}
 
         {entries.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-32 text-muted-foreground/50">
-            <Trophy className="w-8 h-8 mb-2" />
+          <div
+            data-ocid="leaderboard.empty_state"
+            className="flex flex-col items-center justify-center h-32 text-muted-foreground/30"
+          >
+            <Trophy className="w-7 h-7 mb-2" />
             <div className="text-sm">No adventurers ranked yet</div>
           </div>
         )}
       </div>
 
-      <div className="text-xs text-muted-foreground text-center">
-        Rankings are based on Class Tier → Level → XP. Season resets wipe all
-        rankings.
+      <div className="text-xs text-muted-foreground/40 text-center">
+        Rankings: Class Tier → Level → XP. Season resets wipe all rankings.
       </div>
     </div>
   );

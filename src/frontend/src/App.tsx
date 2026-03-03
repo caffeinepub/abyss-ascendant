@@ -271,14 +271,14 @@ function AppContent() {
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-surface-1 flex items-center justify-center">
-        <div className="text-center">
-          <img
-            src="/assets/generated/logo-sigil.dim_256x256.png"
-            alt="Logo"
-            className="w-16 h-16 mx-auto mb-4 opacity-80 animate-pulse"
-          />
-          <p className="text-muted-foreground">Initializing...</p>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center animate-fade-in">
+          <div className="w-16 h-16 mx-auto mb-4 opacity-80 flex items-center justify-center text-5xl">
+            ⚔
+          </div>
+          <p className="text-muted-foreground text-sm font-display tracking-widest uppercase">
+            Entering the Abyss...
+          </p>
         </div>
       </div>
     );
@@ -290,34 +290,38 @@ function AppContent() {
 
   if (showProfileSetup) {
     return (
-      <div className="min-h-screen bg-surface-1 flex items-center justify-center p-4">
-        <div className="bg-surface-2 border border-border rounded-lg p-8 max-w-sm w-full text-center">
-          <img
-            src="/assets/generated/logo-sigil.dim_256x256.png"
-            alt="Logo"
-            className="w-16 h-16 mx-auto mb-4"
-          />
-          <h2 className="font-display text-2xl text-primary mb-2">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="bg-surface-1 border border-border rounded-xl p-8 max-w-sm w-full text-center shadow-dungeon animate-slide-up">
+          <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center text-5xl">
+            ⚔
+          </div>
+          <h2 className="font-display text-2xl text-primary mb-1">
             Welcome, Adventurer
           </h2>
           <p className="text-muted-foreground text-sm mb-6">
-            Choose your name to begin your journey.
+            Claim your name before the darkness takes it.
           </p>
           <input
             type="text"
             value={profileName}
             onChange={(e) => setProfileName(e.target.value)}
             placeholder="Enter your name..."
-            className="w-full bg-surface-1 border border-border rounded px-3 py-2 text-foreground mb-4 focus:outline-none focus:ring-1 focus:ring-primary"
+            data-ocid="profile.input"
+            className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-foreground mb-4 focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-muted-foreground/60"
             onKeyDown={(e) => e.key === "Enter" && handleSaveProfile()}
           />
           <button
             type="button"
             onClick={handleSaveProfile}
             disabled={!profileName.trim() || saveProfile.isPending}
-            className="w-full bg-primary text-primary-foreground rounded py-2 font-display tracking-wide disabled:opacity-50"
+            data-ocid="profile.submit_button"
+            className="w-full rounded-lg py-3 font-display tracking-wider text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-90"
+            style={{
+              background: "oklch(0.65 0.17 38)",
+              color: "oklch(0.08 0.01 38)",
+            }}
           >
-            {saveProfile.isPending ? "Saving..." : "Begin Adventure"}
+            {saveProfile.isPending ? "Entering..." : "Enter the Abyss"}
           </button>
         </div>
       </div>
@@ -577,33 +581,74 @@ function LoginScreen() {
   const isLoggingIn = loginStatus === "logging-in";
 
   return (
-    <div className="min-h-screen bg-surface-1 flex flex-col items-center justify-center p-4">
-      <div className="text-center max-w-md">
-        <img
-          src="/assets/generated/logo-sigil.dim_256x256.png"
-          alt="Dungeon Crawler"
-          className="w-24 h-24 mx-auto mb-6"
+    <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+      {/* Dungeon background — CSS gradient, no image */}
+      <div className="absolute inset-0">
+        <div
+          className="w-full h-full"
+          style={{
+            background:
+              "linear-gradient(180deg, oklch(0.06 0.02 258) 0%, oklch(0.04 0.01 258) 100%)",
+          }}
         />
-        <h1 className="font-display text-4xl text-primary mb-2">
-          Dungeon Crawler
-        </h1>
-        <p className="text-muted-foreground mb-8 text-sm">
-          An on-chain RPG adventure. Battle monsters, collect loot, and rise
-          through the ranks.
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60" />
+      </div>
+
+      {/* Login card */}
+      <div className="relative z-10 flex flex-col items-center max-w-sm w-full px-6 animate-slide-up">
+        {/* Sigil */}
+        <div className="relative mb-5 flex items-center justify-center">
+          <div
+            className="w-24 h-24 flex items-center justify-center text-6xl select-none"
+            style={{
+              filter: "drop-shadow(0 0 16px oklch(0.65 0.17 38 / 0.7))",
+            }}
+          >
+            ⚔
+          </div>
+        </div>
+
+        {/* Title */}
+        <div className="text-center mb-2">
+          <h1
+            className="font-display text-4xl font-bold tracking-widest uppercase"
+            style={{
+              color: "oklch(0.72 0.17 38)",
+              textShadow: "0 0 30px oklch(0.65 0.17 38 / 0.5)",
+            }}
+          >
+            Abyss Ascendant
+          </h1>
+        </div>
+
+        <p className="text-muted-foreground text-sm text-center mb-8 max-w-xs leading-relaxed">
+          An on-chain RPG of darkness and glory. Battle monsters, collect cursed
+          loot, and climb the eternal ladder.
         </p>
+
+        {/* CTA */}
         <button
           type="button"
           onClick={login}
           disabled={isLoggingIn}
-          className="bg-primary text-primary-foreground px-8 py-3 rounded font-display tracking-wide text-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
+          data-ocid="login.primary_button"
+          className="w-full py-3.5 px-8 rounded-lg font-display tracking-wider text-base font-semibold disabled:opacity-50 transition-all animate-ember-pulse"
+          style={{
+            background: "oklch(0.65 0.17 38)",
+            color: "oklch(0.08 0.01 38)",
+          }}
         >
-          {isLoggingIn ? "Connecting..." : "Begin Adventure"}
+          {isLoggingIn ? "Entering the Abyss..." : "Begin Adventure"}
         </button>
-        <p className="text-xs text-muted-foreground mt-4">
-          Secured by Internet Identity
+
+        <p className="text-xs text-muted-foreground mt-4 opacity-60">
+          🔐 Secured by Internet Identity
         </p>
       </div>
-      <AppFooter />
+
+      <div className="relative z-10 mt-auto">
+        <AppFooter />
+      </div>
     </div>
   );
 }
@@ -612,17 +657,17 @@ function AppFooter() {
   const appId =
     typeof window !== "undefined"
       ? encodeURIComponent(window.location.hostname)
-      : "dungeon-crawler";
+      : "abyss-ascendant";
   return (
-    <footer className="text-center py-4 text-xs text-muted-foreground">
+    <footer className="text-center py-4 text-xs text-muted-foreground/50">
       <p>
-        © {new Date().getFullYear()} Dungeon Crawler &nbsp;·&nbsp; Built with{" "}
-        <span className="text-red-400">♥</span> using{" "}
+        © {new Date().getFullYear()} Abyss Ascendant &nbsp;·&nbsp; Built with{" "}
+        <span className="text-ember/70">♥</span> using{" "}
         <a
-          href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${appId}`}
+          href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${appId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-primary hover:underline"
+          className="text-primary/70 hover:text-primary transition-colors hover:underline"
         >
           caffeine.ai
         </a>

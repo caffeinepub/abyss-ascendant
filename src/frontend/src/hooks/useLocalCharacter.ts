@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Character } from "../backend";
 import {
   type GeneratedItem,
@@ -12,7 +12,6 @@ import {
   calculateAvailableAbilityPoints,
   calculateMaxHp,
   calculateUnspentStatPoints,
-  computeEquipmentBonuses,
 } from "../types/game";
 
 const STORAGE_KEY_PREFIX = "abyss_char_";
@@ -114,18 +113,7 @@ function buildLocalCharacter(
   const withBonus = applyClassStatBonus(baseStats, characterClass);
 
   const equippedItems = stored?.equippedItems || [];
-  const equipBonuses = computeEquipmentBonuses(equippedItems);
-
-  // Effective stats = base stats + class bonus + all equipment bonuses
-  const effectiveStr = withBonus.str + equipBonuses.str;
-  const effectiveDex = withBonus.dex + equipBonuses.dex;
-  const effectiveInt = withBonus.int + equipBonuses.int;
-  const effectiveVit = withBonus.vit + equipBonuses.vit;
-  const effectiveCritChance =
-    (Number(backendChar.advancedStats.critChance) || 5) +
-    equipBonuses.bonusCritChance;
-
-  const maxHp = calculateMaxHp(effectiveVit, equipBonuses.bonusHp);
+  const maxHp = calculateMaxHp(withBonus.vit);
   const backendCurrentHp = Number(backendChar.advancedStats.currentHP);
   const rawHp =
     currentHpOverride !== undefined ? currentHpOverride : backendCurrentHp;
@@ -174,13 +162,13 @@ function buildLocalCharacter(
     status: backendChar.status === "Dead" ? "Dead" : "Alive",
     baseStats,
     stats: {
-      str: effectiveStr,
-      dex: effectiveDex,
-      int: effectiveInt,
-      vit: effectiveVit,
+      str: withBonus.str,
+      dex: withBonus.dex,
+      int: withBonus.int,
+      vit: withBonus.vit,
       maxHp,
       currentHp,
-      critChance: effectiveCritChance,
+      critChance: Number(backendChar.advancedStats.critChance) || 5,
       critPower: Number(backendChar.advancedStats.critPower) || 50,
     },
     totalStatPointsEarned: totalEarned,
@@ -221,16 +209,20 @@ export function useLocalCharacter(
     null,
   );
 
+  // Track the last characterId we built for, to detect character switches
+  const prevCharacterIdRef = useRef<number | null>(null);
+
   // Rebuild character from backend whenever backendChar changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: localCharacter intentionally excluded to avoid infinite re-render loop
   useEffect(() => {
     if (characterId === null || !backendChar) {
       setLocalCharacter(null);
+      prevCharacterIdRef.current = null;
       return;
     }
 
     const stored = loadStoredData(characterId);
-    const isNewCharacter = !localCharacter || localCharacter.id !== characterId;
+    const isNewCharacter = prevCharacterIdRef.current !== characterId;
+    prevCharacterIdRef.current = characterId;
 
     if (isNewCharacter) {
       setLocalCharacter(buildLocalCharacter(characterId, backendChar, stored));
@@ -275,17 +267,8 @@ export function useLocalCharacter(
       setLocalCharacter((prev) => {
         if (!prev) return prev;
         const characterClass = prev.class;
-        const withClassBonus = applyClassStatBonus(
-          newBaseStats,
-          characterClass,
-        );
-        const equipBonuses = computeEquipmentBonuses(prev.equippedItems);
-
-        const effectiveStr = withClassBonus.str + equipBonuses.str;
-        const effectiveDex = withClassBonus.dex + equipBonuses.dex;
-        const effectiveInt = withClassBonus.int + equipBonuses.int;
-        const effectiveVit = withClassBonus.vit + equipBonuses.vit;
-        const maxHp = calculateMaxHp(effectiveVit, equipBonuses.bonusHp);
+        const withBonus = applyClassStatBonus(newBaseStats, characterClass);
+        const maxHp = calculateMaxHp(withBonus.vit);
         const currentHp = Math.min(prev.stats.currentHp, maxHp);
         const unspentStatPoints = calculateUnspentStatPoints(
           prev.totalStatPointsEarned,
@@ -297,10 +280,10 @@ export function useLocalCharacter(
           baseStats: newBaseStats,
           stats: {
             ...prev.stats,
-            str: effectiveStr,
-            dex: effectiveDex,
-            int: effectiveInt,
-            vit: effectiveVit,
+            str: withBonus.str,
+            dex: withBonus.dex,
+            int: withBonus.int,
+            vit: withBonus.vit,
             maxHp,
             currentHp,
           },
@@ -352,38 +335,14 @@ export function useLocalCharacter(
           inventory,
           stash,
         });
-
-        // Recompute effective stats including new equipment bonuses
-        const prevEquipBonuses = computeEquipmentBonuses(prev.equippedItems);
-        const newEquipBonuses = computeEquipmentBonuses(equippedItems);
-        const withClassBonus = applyClassStatBonus(prev.baseStats, prev.class);
-        const effectiveStr = withClassBonus.str + newEquipBonuses.str;
-        const effectiveDex = withClassBonus.dex + newEquipBonuses.dex;
-        const effectiveInt = withClassBonus.int + newEquipBonuses.int;
-        const effectiveVit = withClassBonus.vit + newEquipBonuses.vit;
-        // Strip old equipment crit and apply new equipment crit on top of base crit
-        const baseCritChance =
-          prev.stats.critChance - prevEquipBonuses.bonusCritChance;
-        const effectiveCritChance =
-          baseCritChance + newEquipBonuses.bonusCritChance;
-        const maxHp = calculateMaxHp(effectiveVit, newEquipBonuses.bonusHp);
+        const maxHp = calculateMaxHp(prev.stats.vit);
         const currentHp = Math.min(prev.stats.currentHp, maxHp);
-
         return {
           ...prev,
           equippedItems,
           inventory,
           stash,
-          stats: {
-            ...prev.stats,
-            str: effectiveStr,
-            dex: effectiveDex,
-            int: effectiveInt,
-            vit: effectiveVit,
-            critChance: Math.max(0, effectiveCritChance),
-            maxHp,
-            currentHp,
-          },
+          stats: { ...prev.stats, maxHp, currentHp },
         };
       });
     },

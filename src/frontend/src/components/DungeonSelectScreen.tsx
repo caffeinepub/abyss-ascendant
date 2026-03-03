@@ -129,31 +129,31 @@ export default function DungeonSelectScreen({
   const maxHp = character.stats.maxHp;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
-      <div className="mb-2">
-        <h2 className="text-2xl font-bold text-foreground font-display mb-1">
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-4 animate-fade-in">
+      <div className="mb-1">
+        <h2 className="font-display text-2xl font-bold text-foreground mb-1">
           Enter the Abyss
         </h2>
-        <p className="text-muted text-sm">
-          Choose your challenge. The deeper you go, the greater the reward.
+        <p className="text-muted-foreground text-sm">
+          Choose your challenge. The deeper you descend, the greater the reward.
         </p>
       </div>
 
       {/* Pending loot notification */}
       {showLootModal && pendingLoot.length > 0 && (
-        <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-4">
+        <div className="bg-dungeon-gold/5 border border-dungeon-gold/30 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Gift className="w-5 h-5 text-yellow-400" />
-              <span className="font-semibold text-yellow-300 text-sm">
+              <Gift className="w-5 h-5 text-dungeon-gold" />
+              <span className="font-semibold text-dungeon-gold text-sm">
                 {pendingLoot.length} item{pendingLoot.length !== 1 ? "s" : ""}{" "}
-                found!
+                acquired!
               </span>
             </div>
             <button
               type="button"
               onClick={handleClearLoot}
-              className="text-xs text-muted hover:text-foreground transition-colors"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               Dismiss
             </button>
@@ -166,7 +166,7 @@ export default function DungeonSelectScreen({
           <button
             type="button"
             onClick={handleClearLoot}
-            className="mt-3 w-full text-sm text-center text-muted hover:text-foreground transition-colors"
+            className="mt-3 w-full text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
           >
             Dismiss all
           </button>
@@ -175,30 +175,30 @@ export default function DungeonSelectScreen({
 
       {/* HP Warning */}
       {currentHp < maxHp * 0.3 && (
-        <div className="flex items-center gap-2 bg-red-900/20 border border-red-700/40 rounded-lg px-4 py-2 text-red-400 text-sm">
+        <div className="flex items-center gap-2 bg-health-low/10 border border-health-low/30 rounded-lg px-4 py-2 text-health-low text-sm">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          <span>Low HP! Consider resting before entering the dungeon.</span>
+          <span>Low HP — consider resting before entering the dungeon.</span>
         </div>
       )}
 
-      {/* Dungeon Card */}
-      <div className="bg-surface-2 border border-border rounded-xl p-5 space-y-4">
+      {/* ── Dungeon Card ──────────────────────────────────────────── */}
+      <div className="panel-ember rounded-xl p-5 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Sword className="w-5 h-5 text-primary" />
+          <div className="w-10 h-10 rounded-lg bg-ember/10 border border-ember/20 flex items-center justify-center flex-shrink-0">
+            <Sword className="w-5 h-5 text-ember" />
           </div>
           <div>
             <h3 className="font-display font-semibold text-foreground">
               The Catacombs
             </h3>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-muted-foreground">
               Standard dungeon run — fight monsters, earn XP and loot
             </p>
           </div>
         </div>
 
         {/* Monster Level Selector */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
             <label
               htmlFor="monster-level-input"
@@ -206,18 +206,17 @@ export default function DungeonSelectScreen({
             >
               Monster Level
             </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="monster-level-input"
-                type="number"
-                min={minLevel}
-                max={maxLevel}
-                value={inputValue}
-                onChange={handleLevelChange}
-                onBlur={handleLevelBlur}
-                className="w-16 text-center bg-surface-1 border border-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
+            <input
+              id="monster-level-input"
+              type="number"
+              min={minLevel}
+              max={maxLevel}
+              value={inputValue}
+              onChange={handleLevelChange}
+              onBlur={handleLevelBlur}
+              data-ocid="dungeon.level.input"
+              className="w-16 text-center bg-surface-2 border border-border/50 rounded-lg px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
           </div>
 
           <input
@@ -226,16 +225,16 @@ export default function DungeonSelectScreen({
             max={maxLevel}
             value={monsterLevel}
             onChange={handleSliderChange}
-            className="w-full accent-primary"
+            className="w-full accent-primary h-1.5 rounded-full"
           />
 
-          <div className="flex items-center justify-between text-xs text-muted">
+          <div className="flex items-center justify-between text-xs text-muted-foreground/60">
             <span>Lv. {minLevel}</span>
             <span>Lv. {maxLevel}</span>
           </div>
 
           {levelError && (
-            <div className="flex items-center gap-2 text-red-400 text-xs">
+            <div className="flex items-center gap-2 text-health-low text-xs bg-health-low/10 rounded-lg px-3 py-2">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span>{levelError}</span>
             </div>
@@ -244,57 +243,66 @@ export default function DungeonSelectScreen({
 
         {/* Stats row */}
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="flex items-center gap-2 bg-surface-1 rounded-lg px-3 py-2">
-            <Zap className="w-3.5 h-3.5 text-yellow-400" />
+          <div className="flex items-center gap-2 bg-surface-2 rounded-lg px-3 py-2 border border-border/30">
+            <Zap className="w-3.5 h-3.5 text-dungeon-gold" />
             <span className={xpInfo.color}>{xpInfo.label}</span>
           </div>
-          <div className="flex items-center gap-2 bg-surface-1 rounded-lg px-3 py-2">
-            <Gift className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-muted">{dropRatePercent}% drop rate</span>
+          <div className="flex items-center gap-2 bg-surface-2 rounded-lg px-3 py-2 border border-border/30">
+            <Gift className="w-3.5 h-3.5 text-rarity-rare" />
+            <span className="text-muted-foreground">
+              {dropRatePercent}% drop rate
+            </span>
           </div>
         </div>
 
         <button
           type="button"
+          data-ocid="dungeon.enter.primary_button"
           onClick={handleStartCombat}
           disabled={!canStartCombat}
-          className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full py-3 rounded-lg font-display font-semibold text-sm tracking-wide transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{
+            background: "oklch(0.65 0.17 38)",
+            color: "oklch(0.08 0.01 38)",
+          }}
         >
-          Enter Dungeon
+          Enter the Dungeon
         </button>
       </div>
 
-      {/* Ascension Trial */}
-      <div className="bg-surface-2 border border-border rounded-xl p-5 space-y-3 opacity-90">
+      {/* ── Ascension Trial ───────────────────────────────────────── */}
+      <div className="panel-gold rounded-xl p-5 space-y-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-            <Flame className="w-5 h-5 text-yellow-400" />
+          <div className="w-10 h-10 rounded-lg bg-dungeon-gold/10 border border-dungeon-gold/20 flex items-center justify-center flex-shrink-0">
+            <Flame className="w-5 h-5 text-dungeon-gold" />
           </div>
           <div>
             <h3 className="font-display font-semibold text-foreground">
               Ascension Trial
             </h3>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-muted-foreground">
               Face monsters 5 levels above you — high risk, high reward
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="flex items-center gap-2 bg-surface-1 rounded-lg px-3 py-2">
-            <Zap className="w-3.5 h-3.5 text-yellow-400" />
-            <span className="text-yellow-400">Bonus XP (+50%)</span>
+          <div className="flex items-center gap-2 bg-surface-2 rounded-lg px-3 py-2 border border-border/30">
+            <Zap className="w-3.5 h-3.5 text-dungeon-gold" />
+            <span className="text-dungeon-gold">Bonus XP (+50%)</span>
           </div>
-          <div className="flex items-center gap-2 bg-surface-1 rounded-lg px-3 py-2">
-            <Gift className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-muted">6% drop rate</span>
+          <div className="flex items-center gap-2 bg-surface-2 rounded-lg px-3 py-2 border border-border/30">
+            <Gift className="w-3.5 h-3.5 text-rarity-rare" />
+            <span className="text-muted-foreground">6% drop rate</span>
           </div>
         </div>
 
         <button
           type="button"
+          data-ocid="dungeon.ascension.primary_button"
           onClick={handleStartAscension}
-          className="w-full py-2.5 rounded-lg bg-yellow-600/80 text-white font-semibold text-sm hover:bg-yellow-600 transition-colors"
+          className="w-full py-2.5 rounded-lg font-display font-semibold text-sm tracking-wide transition-all text-background hover:opacity-90"
+          style={{ background: "oklch(0.72 0.14 72)" }}
         >
           Begin Ascension (Lv. {character.level + 5})
         </button>

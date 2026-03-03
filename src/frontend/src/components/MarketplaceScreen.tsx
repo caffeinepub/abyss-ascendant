@@ -74,14 +74,14 @@ export default function MarketplaceScreen({
   const callerPrincipal = identity?.getPrincipal().toString();
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-4">
+    <div className="max-w-4xl mx-auto p-4 space-y-4 animate-fade-in">
       {/* Header */}
-      <div className="bg-surface-1 border border-border rounded-xl p-5">
-        <h2 className="text-xl font-bold text-foreground font-display">
+      <div className="panel rounded-xl p-5">
+        <h2 className="font-display text-xl font-bold text-foreground">
           Marketplace
         </h2>
-        <p className="text-sm text-muted mt-0.5">
-          Buy and sell items with other adventurers.
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Trade items with other adventurers across the realm.
         </p>
       </div>
 
@@ -91,14 +91,18 @@ export default function MarketplaceScreen({
           <button
             type="button"
             key={tab}
+            data-ocid={`marketplace.${tab}.tab`}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${
               activeTab === tab
-                ? "bg-primary text-primary-foreground"
-                : "bg-surface-1 border border-border text-muted hover:text-foreground"
+                ? "text-primary-foreground"
+                : "bg-surface-1 border border-border/50 text-muted-foreground hover:text-foreground"
             }`}
+            style={
+              activeTab === tab ? { background: "oklch(0.65 0.17 38)" } : {}
+            }
           >
-            {tab === "browse" ? "🛒 Browse" : "💰 Sell"}
+            {tab === "browse" ? "🛒 Browse" : "💎 Sell"}
           </button>
         ))}
       </div>

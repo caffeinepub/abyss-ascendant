@@ -113,7 +113,7 @@ export default function AbilitySelectModal({
             Equipped Abilities
           </p>
           <div className="flex gap-2">
-            {(["slot-a", "slot-b", "slot-c"] as const)
+            {(["slot-0", "slot-1", "slot-2"] as const)
               .slice(0, MAX_EQUIPPED)
               .map((slotId, i) => {
                 const abilityName = selectedAbilities[i];

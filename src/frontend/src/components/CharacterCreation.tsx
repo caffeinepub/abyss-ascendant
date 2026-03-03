@@ -15,7 +15,6 @@ import {
   Loader2,
   Plus,
   Shield,
-  Sword,
   Trash2,
 } from "lucide-react";
 import React, { useState } from "react";
@@ -39,7 +38,6 @@ interface CharacterCreationProps {
 }
 
 const TOTAL_STAT_POINTS = 8;
-
 type CreationStep = "class" | "details";
 
 interface ClassInfo {
@@ -48,11 +46,12 @@ interface ClassInfo {
   description: string;
   statBonus: string;
   statBonusKey: "str" | "dex" | "int";
-  image: string;
-  color: string;
-  borderColor: string;
-  bgColor: string;
-  textColor: string;
+  icon: string;
+  gradient: string;
+  accentColor: string;
+  borderActive: string;
+  bgActive: string;
+  textActive: string;
 }
 
 const CLASSES: ClassInfo[] = [
@@ -63,11 +62,13 @@ const CLASSES: ClassInfo[] = [
       "A battle-hardened fighter who dominates the front lines with raw strength and unbreakable will.",
     statBonus: "+3 Strength",
     statBonusKey: "str",
-    image: "/assets/generated/class-warrior.dim_256x256.png",
-    color: "red",
-    borderColor: "border-red-500/60",
-    bgColor: "bg-red-950/30",
-    textColor: "text-red-400",
+    icon: "⚔️",
+    gradient:
+      "linear-gradient(135deg, oklch(0.18 0.05 38) 0%, oklch(0.12 0.03 38) 100%)",
+    accentColor: "orange",
+    borderActive: "border-orange-500/70",
+    bgActive: "bg-orange-950/30",
+    textActive: "text-orange-400",
   },
   {
     id: "Rogue",
@@ -76,11 +77,13 @@ const CLASSES: ClassInfo[] = [
       "A swift and deadly assassin who strikes from the shadows with precision and cunning.",
     statBonus: "+3 Dexterity",
     statBonusKey: "dex",
-    image: "/assets/generated/class-rogue.dim_256x256.png",
-    color: "purple",
-    borderColor: "border-purple-500/60",
-    bgColor: "bg-purple-950/30",
-    textColor: "text-purple-400",
+    icon: "🗡️",
+    gradient:
+      "linear-gradient(135deg, oklch(0.18 0.05 180) 0%, oklch(0.12 0.03 180) 100%)",
+    accentColor: "teal",
+    borderActive: "border-teal-500/70",
+    bgActive: "bg-teal-950/30",
+    textActive: "text-teal-400",
   },
   {
     id: "Mage",
@@ -89,11 +92,13 @@ const CLASSES: ClassInfo[] = [
       "A master of arcane arts who channels devastating magical forces to obliterate enemies.",
     statBonus: "+3 Intelligence",
     statBonusKey: "int",
-    image: "/assets/generated/class-mage.dim_256x256.png",
-    color: "blue",
-    borderColor: "border-blue-500/60",
-    bgColor: "bg-blue-950/30",
-    textColor: "text-blue-400",
+    icon: "🔮",
+    gradient:
+      "linear-gradient(135deg, oklch(0.18 0.05 298) 0%, oklch(0.12 0.03 298) 100%)",
+    accentColor: "violet",
+    borderActive: "border-violet-500/70",
+    bgActive: "bg-violet-950/30",
+    textActive: "text-violet-400",
   },
 ];
 
@@ -145,10 +150,6 @@ export default function CharacterCreation({
     setStatPoints((prev) => ({ ...prev, [stat]: prev[stat] - 1 }));
   };
 
-  const handleSelectClass = (cls: CharacterClass) => {
-    setSelectedClass(cls);
-  };
-
   const handleProceedToDetails = () => {
     if (!selectedClass) {
       setError("Please select a class to continue.");
@@ -169,7 +170,7 @@ export default function CharacterCreation({
     }
     if (remainingPoints !== 0) {
       setError(
-        `Please allocate all ${TOTAL_STAT_POINTS} stat points (${remainingPoints} remaining).`,
+        `Allocate all ${TOTAL_STAT_POINTS} stat points (${remainingPoints} remaining).`,
       );
       return;
     }
@@ -197,12 +198,9 @@ export default function CharacterCreation({
         equippedAbilities: [],
       });
 
-      // result is the character ID (number) returned from the backend
       const characterId = typeof result === "number" ? result : 0;
-
       const { weapon, armor } = generateStarterEquipment();
       saveStarterEquipmentForCharacter(characterId, weapon, armor);
-
       onCharacterCreated(characterId);
     } catch (err) {
       if (err instanceof CharacterLimitReachedError) {
@@ -225,68 +223,86 @@ export default function CharacterCreation({
   };
 
   const handleBack = onBack || onCancel;
-
-  const statLabels: {
-    key: keyof typeof statPoints;
-    label: string;
-    color: string;
-  }[] = [
-    { key: "str", label: "Strength", color: "text-red-400" },
-    { key: "dex", label: "Dexterity", color: "text-green-400" },
-    { key: "int", label: "Intelligence", color: "text-blue-400" },
-    { key: "vit", label: "Vitality", color: "text-yellow-400" },
-  ];
-
   const selectedClassInfo = CLASSES.find((c) => c.id === selectedClass);
   const classAbilities = selectedClass
     ? ABILITIES.filter((a) => a.classRestriction === selectedClass)
     : [];
 
+  const statLabels = [
+    { key: "str" as const, label: "Strength", color: "text-orange-400" },
+    { key: "dex" as const, label: "Dexterity", color: "text-teal-400" },
+    { key: "int" as const, label: "Intelligence", color: "text-violet-400" },
+    { key: "vit" as const, label: "Vitality", color: "text-rose-400" },
+  ];
+
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-start py-10 px-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-start py-10 px-4 animate-fade-in">
       <div className="w-full max-w-3xl">
-        {/* Header */}
+        {/* ── Header ──────────────────────────────────────────────── */}
         <div className="text-center mb-8">
-          <h1 className="font-display text-4xl text-primary mb-2">
-            Create Character
+          <div
+            aria-hidden="true"
+            className="w-10 h-10 mx-auto mb-3 flex items-center justify-center text-2xl opacity-60"
+          >
+            ⚔
+          </div>
+          <h1 className="font-display text-3xl text-foreground font-bold mb-1">
+            {step === "class" ? "Choose Your Path" : "Forge Your Legend"}
           </h1>
           <p className="text-muted-foreground text-sm">
             {step === "class"
-              ? "Choose your path in the realm of darkness"
-              : "Forge your legend"}
+              ? "Your class defines your weapons, armor, and available abilities."
+              : "Claim your name and allocate your starting stats."}
           </p>
-          <div className="flex items-center justify-center gap-3 mt-4">
-            <div
-              className={`flex items-center gap-1.5 text-xs font-medium ${step === "class" ? "text-primary" : "text-muted-foreground"}`}
-            >
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === "class" ? "bg-primary text-primary-foreground" : "bg-primary/30 text-primary"}`}
-              >
-                1
-              </div>
-              Choose Class
-            </div>
-            <div className="w-8 h-px bg-border" />
-            <div
-              className={`flex items-center gap-1.5 text-xs font-medium ${step === "details" ? "text-primary" : "text-muted-foreground"}`}
-            >
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === "details" ? "bg-primary text-primary-foreground" : "bg-surface-2 text-muted-foreground"}`}
-              >
-                2
-              </div>
-              Character Details
-            </div>
+
+          {/* Step indicators */}
+          <div className="flex items-center justify-center gap-3 mt-5">
+            {[
+              { n: 1, label: "Choose Class", stepKey: "class" },
+              { n: 2, label: "Details", stepKey: "details" },
+            ].map(({ n, label, stepKey }, i) => {
+              const isActive = step === stepKey;
+              const isDone = step === "details" && stepKey === "class";
+              return (
+                <React.Fragment key={stepKey}>
+                  {i > 0 && (
+                    <div
+                      className={`w-8 h-px ${isDone ? "bg-primary/50" : "bg-border"}`}
+                    />
+                  )}
+                  <div
+                    className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${isActive ? "text-primary" : "text-muted-foreground/60"}`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                        isActive
+                          ? "text-primary-foreground"
+                          : isDone
+                            ? "bg-primary/30 text-primary"
+                            : "bg-surface-2 text-muted-foreground/40"
+                      }`}
+                      style={
+                        isActive ? { background: "oklch(0.65 0.17 38)" } : {}
+                      }
+                    >
+                      {isDone ? "✓" : n}
+                    </div>
+                    {label}
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
 
-        {/* ── STEP 1: Class Selection ── */}
+        {/* ── Step 1: Class Selection ──────────────────────────────── */}
         {step === "class" && (
           <div className="space-y-6">
+            {/* Existing characters list */}
             {existingCharacters.length > 0 && (
-              <div className="mb-2">
-                <h2 className="font-display text-lg text-foreground mb-3 flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-primary" />
+              <div>
+                <h2 className="font-display text-sm text-muted-foreground mb-3 flex items-center gap-2 uppercase tracking-wider">
+                  <Shield className="w-3.5 h-3.5 text-primary/60" />
                   Your Characters
                 </h2>
                 <div className="space-y-2">
@@ -294,22 +310,23 @@ export default function CharacterCreation({
                     const realmStr = char.realm as string;
                     const statusStr = char.status as string;
                     const realmLabel =
-                      realmStr === "Hardcore" ? "⚔ Hardcore" : "🛡 Softcore";
+                      realmStr === "Hardcore" ? "⚔ HC" : "🛡 SC";
                     const isDead = statusStr === "Dead";
                     return (
                       <div
-                        key={char.name}
-                        className="flex items-center justify-between bg-surface-1 border border-border rounded-lg px-4 py-3"
+                        key={`${String(char.name)}-${idx}`}
+                        data-ocid={`creation.character.item.${idx + 1}`}
+                        className="flex items-center justify-between bg-surface-1 border border-border/40 rounded-lg px-4 py-3"
                       >
-                        <div className="flex flex-col">
-                          <span className="font-display text-foreground font-semibold">
+                        <div>
+                          <span className="font-display text-foreground font-semibold text-sm">
                             {char.name}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground ml-2">
                             Lv.{Number(char.level)} · {realmLabel}
                             {isDead && (
                               <span className="ml-2 text-destructive font-medium">
-                                · Dead
+                                · Fallen
                               </span>
                             )}
                           </span>
@@ -317,13 +334,14 @@ export default function CharacterCreation({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          data-ocid={`creation.character.delete_button.${idx + 1}`}
+                          className="text-destructive/60 hover:text-destructive hover:bg-destructive/10 h-7 w-7"
                           onClick={() =>
                             setDeleteTarget({ id: idx, name: char.name })
                           }
                           disabled={deleteCharacterMutation.isPending}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     );
@@ -332,7 +350,7 @@ export default function CharacterCreation({
               </div>
             )}
 
-            {/* Class Cards */}
+            {/* Class cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {CLASSES.map((cls) => {
                 const isSelected = selectedClass === cls.id;
@@ -343,62 +361,66 @@ export default function CharacterCreation({
                   <button
                     type="button"
                     key={cls.id}
-                    onClick={() => handleSelectClass(cls.id)}
-                    className={`relative rounded-xl border-2 cursor-pointer transition-all overflow-hidden w-full text-left ${
+                    data-ocid={`creation.class.${cls.id.toLowerCase()}.button`}
+                    onClick={() => setSelectedClass(cls.id)}
+                    className={`relative rounded-xl border-2 cursor-pointer transition-all overflow-hidden text-left w-full group ${
                       isSelected
-                        ? `${cls.borderColor} ${cls.bgColor} shadow-lg`
-                        : "border-border bg-surface-1 hover:border-border/80 hover:bg-surface-2"
+                        ? `${cls.borderActive} ${cls.bgActive} shadow-lg`
+                        : "border-border/40 bg-surface-1 hover:border-border/70 hover:bg-surface-2"
                     }`}
                   >
-                    {/* Class image */}
-                    <div className="aspect-square w-full overflow-hidden">
-                      <img
-                        src={cls.image}
-                        alt={cls.label}
-                        className="w-full h-full object-cover"
-                      />
+                    {/* Class portrait — CSS gradient with icon */}
+                    <div
+                      className="aspect-square w-full overflow-hidden relative flex items-center justify-center"
+                      style={{ background: cls.gradient }}
+                    >
+                      <span className="text-7xl select-none">{cls.icon}</span>
+                      {isSelected && (
+                        <div className="absolute top-2 right-2">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${cls.bgActive} ${cls.textActive} ${cls.borderActive}`}
+                          >
+                            ✓ Selected
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Class info */}
+                    {/* Class info — text goes here, not on image */}
                     <div className="p-3">
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-1.5">
                         <h3
-                          className={`font-display font-bold text-lg ${isSelected ? cls.textColor : "text-foreground"}`}
+                          className={`font-display font-bold text-lg ${isSelected ? cls.textActive : "text-foreground"}`}
                         >
                           {cls.label}
                         </h3>
-                        {isSelected && (
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full ${cls.bgColor} ${cls.textColor} border ${cls.borderColor}`}
-                          >
-                            Selected
-                          </span>
-                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                      <p className="text-xs text-muted-foreground mb-2 line-clamp-2 leading-relaxed">
                         {cls.description}
                       </p>
                       <div
-                        className={`text-xs font-semibold ${cls.textColor} mb-2`}
+                        className={`text-xs font-semibold ${cls.textActive} mb-2`}
                       >
                         {cls.statBonus}
                       </div>
                       {abilities.length > 0 && (
                         <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
                             Abilities:
                           </p>
                           {abilities.slice(0, 2).map((a) => (
                             <div
                               key={a.id}
-                              className="flex items-center gap-1 text-xs text-muted-foreground"
+                              className="flex items-center gap-1 text-xs text-muted-foreground/70"
                             >
-                              <span>{a.icon}</span>
+                              <span className="text-sm leading-none">
+                                {a.icon}
+                              </span>
                               <span>{a.name}</span>
                             </div>
                           ))}
                           {abilities.length > 2 && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-muted-foreground/50">
                               +{abilities.length - 2} more
                             </p>
                           )}
@@ -411,24 +433,32 @@ export default function CharacterCreation({
             </div>
 
             {error && (
-              <p className="text-destructive text-sm text-center">{error}</p>
+              <p className="text-destructive text-sm text-center bg-destructive/10 rounded-lg px-4 py-2">
+                {error}
+              </p>
             )}
 
             <div className="flex gap-3 justify-between">
               {handleBack && (
                 <Button
                   variant="outline"
+                  data-ocid="creation.back.button"
                   onClick={handleBack}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 border-border/50"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   Back
                 </Button>
               )}
               <Button
+                data-ocid="creation.continue.button"
                 onClick={handleProceedToDetails}
                 disabled={!selectedClass}
                 className="flex items-center gap-2 ml-auto"
+                style={{
+                  background: "oklch(0.65 0.17 38)",
+                  color: "oklch(0.08 0.01 38)",
+                }}
               >
                 Continue
                 <ChevronRight className="w-4 h-4" />
@@ -437,29 +467,30 @@ export default function CharacterCreation({
           </div>
         )}
 
-        {/* ── STEP 2: Character Details ── */}
+        {/* ── Step 2: Character Details ────────────────────────────── */}
         {step === "details" && selectedClassInfo && (
           <div className="space-y-6">
             {/* Selected class summary */}
             <div
-              className={`flex items-center gap-4 rounded-xl border-2 ${selectedClassInfo.borderColor} ${selectedClassInfo.bgColor} p-4`}
+              className={`flex items-center gap-4 rounded-xl border-2 ${selectedClassInfo.borderActive} ${selectedClassInfo.bgActive} p-4`}
             >
-              <img
-                src={selectedClassInfo.image}
-                alt={selectedClassInfo.label}
-                className="w-16 h-16 rounded-lg object-cover"
-              />
+              <div
+                className="w-14 h-14 rounded-lg flex items-center justify-center flex-shrink-0 text-3xl border border-border/30"
+                style={{ background: selectedClassInfo.gradient }}
+              >
+                {selectedClassInfo.icon}
+              </div>
               <div>
                 <h3
-                  className={`font-display font-bold text-xl ${selectedClassInfo.textColor}`}
+                  className={`font-display font-bold text-xl ${selectedClassInfo.textActive}`}
                 >
                   {selectedClassInfo.label}
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   {selectedClassInfo.description}
                 </p>
                 <p
-                  className={`text-xs font-semibold mt-1 ${selectedClassInfo.textColor}`}
+                  className={`text-xs font-semibold mt-1 ${selectedClassInfo.textActive}`}
                 >
                   {selectedClassInfo.statBonus}
                 </p>
@@ -470,7 +501,7 @@ export default function CharacterCreation({
             <div>
               <label
                 htmlFor="character-name-input"
-                className="block text-sm font-medium text-foreground mb-2"
+                className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2"
               >
                 Character Name
               </label>
@@ -481,14 +512,15 @@ export default function CharacterCreation({
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter a name..."
                 maxLength={24}
-                className="w-full bg-surface-1 border border-border rounded-lg px-4 py-2.5 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                data-ocid="creation.name.input"
+                className="w-full bg-surface-2 border border-border/50 rounded-lg px-4 py-2.5 text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all"
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
             </div>
 
             {/* Realm */}
             <div>
-              <p className="block text-sm font-medium text-foreground mb-2">
+              <p className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 Realm
               </p>
               <div className="grid grid-cols-2 gap-3">
@@ -498,29 +530,31 @@ export default function CharacterCreation({
                     label: "Softcore",
                     icon: "🛡",
                     desc: "Death is not permanent",
-                    color: "border-blue-500/60 bg-blue-950/20 text-blue-400",
+                    active: "border-primary/60 bg-primary/10 text-primary",
                   },
                   {
                     value: Realm.Hardcore,
                     label: "Hardcore",
                     icon: "⚔",
                     desc: "Permadeath — one life only",
-                    color: "border-red-500/60 bg-red-950/20 text-red-400",
+                    active:
+                      "border-destructive/60 bg-destructive/10 text-destructive",
                   },
                 ].map((r) => (
                   <button
                     type="button"
                     key={r.label}
+                    data-ocid={`creation.realm.${r.label.toLowerCase()}.button`}
                     onClick={() => setRealm(r.value)}
-                    className={`cursor-pointer rounded-lg border-2 p-3 transition-all text-left w-full ${
+                    className={`cursor-pointer rounded-xl border-2 p-3 transition-all text-left w-full ${
                       realm === r.value
-                        ? r.color
-                        : "border-border bg-surface-1 text-muted-foreground hover:bg-surface-2"
+                        ? r.active
+                        : "border-border/40 bg-surface-1 text-muted-foreground hover:bg-surface-2"
                     }`}
                   >
                     <div className="text-xl mb-1">{r.icon}</div>
                     <div className="font-semibold text-sm">{r.label}</div>
-                    <div className="text-xs opacity-70">{r.desc}</div>
+                    <div className="text-xs opacity-70 mt-0.5">{r.desc}</div>
                   </button>
                 ))}
               </div>
@@ -529,53 +563,58 @@ export default function CharacterCreation({
             {/* Stat allocation */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <p className="block text-sm font-medium text-foreground">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Allocate Stats
                 </p>
                 <span
-                  className={`text-sm font-bold ${remainingPoints > 0 ? "text-accent" : "text-muted-foreground"}`}
+                  className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                    remainingPoints > 0
+                      ? "text-primary bg-primary/10 border border-primary/30"
+                      : "text-muted-foreground"
+                  }`}
                 >
-                  {remainingPoints} points remaining
+                  {remainingPoints} remaining
                 </span>
               </div>
               <div className="space-y-2">
                 {statLabels.map(({ key, label, color }) => (
                   <div
                     key={key}
-                    className="flex items-center gap-3 bg-surface-1 rounded-lg px-4 py-2.5 border border-border"
+                    className="flex items-center gap-3 bg-surface-1 rounded-lg px-4 py-2.5 border border-border/30"
                   >
-                    <span className={`text-sm font-medium w-24 ${color}`}>
+                    <span className={`text-sm font-medium flex-1 ${color}`}>
                       {label}
                     </span>
                     <div className="flex items-center gap-2 ml-auto">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
+                      <button
+                        type="button"
+                        data-ocid={`creation.stat.${key}.decrement_button`}
                         onClick={() => decrementStat(key)}
                         disabled={statPoints[key] <= 1}
+                        className="w-7 h-7 flex items-center justify-center rounded border border-border/50 bg-surface-2 text-muted-foreground hover:text-foreground hover:border-border transition-all disabled:opacity-30 text-sm"
                       >
                         −
-                      </Button>
-                      <span className="w-6 text-center font-bold text-foreground">
+                      </button>
+                      <span className="w-6 text-center font-bold text-foreground text-sm">
                         {statPoints[key]}
                       </span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
+                      <button
+                        type="button"
+                        data-ocid={`creation.stat.${key}.increment_button`}
                         onClick={() => incrementStat(key)}
                         disabled={remainingPoints <= 0}
+                        className="w-7 h-7 flex items-center justify-center rounded border border-border/50 bg-surface-2 text-muted-foreground hover:text-foreground hover:border-border transition-all disabled:opacity-30 text-sm"
                       >
                         +
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
               {selectedClassInfo && (
-                <p className={`text-xs mt-2 ${selectedClassInfo.textColor}`}>
-                  * {selectedClassInfo.statBonus} will be applied automatically
+                <p className={`text-xs mt-2 ${selectedClassInfo.textActive}`}>
+                  * {selectedClassInfo.statBonus} applied automatically on
+                  creation
                 </p>
               )}
             </div>
@@ -583,26 +622,26 @@ export default function CharacterCreation({
             {/* Abilities preview */}
             {classAbilities.length > 0 && (
               <div>
-                <p className="block text-sm font-medium text-foreground mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                   Available Abilities
                 </p>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {classAbilities.slice(0, 3).map((a) => (
                     <div
                       key={a.id}
-                      className="flex items-center gap-2 text-xs text-muted-foreground bg-surface-1 rounded px-3 py-1.5 border border-border"
+                      className="flex items-center gap-2.5 text-xs text-muted-foreground bg-surface-1 rounded-lg px-3 py-2 border border-border/30"
                     >
-                      <span>{a.icon}</span>
+                      <span className="text-sm leading-none">{a.icon}</span>
                       <span className="font-medium text-foreground">
                         {a.name}
                       </span>
-                      <span className="ml-auto">
+                      <span className="ml-auto text-muted-foreground/60">
                         {(a.damageMultiplier * 100).toFixed(0)}% dmg
                       </span>
                     </div>
                   ))}
                   {classAbilities.length > 3 && (
-                    <p className="text-xs text-muted-foreground pl-1">
+                    <p className="text-xs text-muted-foreground/50 pl-1">
                       +{classAbilities.length - 3} more abilities to unlock
                     </p>
                   )}
@@ -610,25 +649,36 @@ export default function CharacterCreation({
               </div>
             )}
 
-            {error && <p className="text-destructive text-sm">{error}</p>}
+            {error && (
+              <p className="text-destructive text-sm bg-destructive/10 rounded-lg px-4 py-2">
+                {error}
+              </p>
+            )}
 
             <div className="flex gap-3">
               <Button
                 variant="outline"
+                data-ocid="creation.back.button"
                 onClick={() => setStep("class")}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 border-border/50"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Back
               </Button>
-              <Button
+              <button
+                type="button"
+                data-ocid="creation.submit_button"
                 onClick={handleCreate}
                 disabled={
                   createCharacterMutation.isPending ||
                   !name.trim() ||
                   remainingPoints !== 0
                 }
-                className="flex-1 flex items-center justify-center gap-2"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-semibold text-sm transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: "oklch(0.65 0.17 38)",
+                  color: "oklch(0.08 0.01 38)",
+                }}
               >
                 {createCharacterMutation.isPending ? (
                   <>
@@ -641,7 +691,7 @@ export default function CharacterCreation({
                     Create Character
                   </>
                 )}
-              </Button>
+              </button>
             </div>
           </div>
         )}
@@ -652,9 +702,14 @@ export default function CharacterCreation({
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          data-ocid="creation.delete.dialog"
+          className="bg-surface-1 border-border"
+        >
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Character</AlertDialogTitle>
+            <AlertDialogTitle className="font-display">
+              Delete Character
+            </AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to permanently delete{" "}
               <span className="font-semibold text-foreground">
@@ -664,8 +719,11 @@ export default function CharacterCreation({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel data-ocid="creation.delete.cancel_button">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
+              data-ocid="creation.delete.confirm_button"
               onClick={handleDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

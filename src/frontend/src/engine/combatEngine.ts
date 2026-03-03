@@ -62,43 +62,46 @@ export function getMaxMonsterLevel(playerLevel: number): number {
   return playerLevel + 5;
 }
 
-/**
- * Get equipment bonuses for combat calculations.
- * NOTE: stat affixes (str, dex, int, vit, hp, critChance) are intentionally NOT
- * aggregated here because they are already baked into playerStats (via useLocalCharacter).
- * This function only returns physicalDamage and defense affixes plus base weapon/armor values,
- * which are additive on top of the already-effective player stats.
- */
 function getEquipmentBonuses(items: GeneratedItem[]): {
+  str: number;
+  dex: number;
+  int: number;
+  vit: number;
+  bonusHp: number;
   bonusDamage: number;
-  bonusMagicDamage: number;
   bonusDefense: number;
 } {
+  let str = 0;
+  let dex = 0;
+  let int_ = 0;
+  let vit = 0;
+  let bonusHp = 0;
   let bonusDamage = 0;
-  let bonusMagicDamage = 0;
   let bonusDefense = 0;
   for (const item of items) {
     for (const affix of item.affixes) {
-      if (affix.stat === "physicalDamage") bonusDamage += affix.value;
-      else if (affix.stat === "magicDamage") bonusMagicDamage += affix.value;
-      else if (affix.stat === "defense") bonusDefense += affix.value;
+      if (affix.stat === "str") str += affix.value;
+      else if (affix.stat === "dex") dex += affix.value;
+      else if (affix.stat === "int") int_ += affix.value;
+      else if (affix.stat === "vit") vit += affix.value;
+      else if (affix.stat === "hp") bonusHp += affix.value;
     }
-    // Base weapon damage and base armor defense
     if (item.itemType === "Weapon") bonusDamage += item.baseDamage || 0;
     if (item.itemType === "Armor") bonusDefense += item.baseDefense || 0;
   }
-  return { bonusDamage, bonusMagicDamage, bonusDefense };
+  return { str, dex, int: int_, vit, bonusHp, bonusDamage, bonusDefense };
 }
 
 function calculatePlayerDamage(
   stats: CombatStats,
   equipBonuses: ReturnType<typeof getEquipmentBonuses>,
 ): { min: number; max: number } {
-  // stats.str and stats.dex already include equipment affix bonuses
+  const totalStr = stats.str + equipBonuses.str;
+  const totalDex = stats.dex + equipBonuses.dex;
   const baseDmg =
     equipBonuses.bonusDamage +
-    Math.floor(stats.str * 0.8) +
-    Math.floor(stats.dex * 0.3);
+    Math.floor(totalStr * 0.8) +
+    Math.floor(totalDex * 0.3);
   const min = Math.max(1, baseDmg);
   const max = Math.max(2, Math.floor(baseDmg * 1.5));
   return { min, max };
@@ -108,7 +111,6 @@ function calculatePlayerDefense(
   stats: CombatStats,
   equipBonuses: ReturnType<typeof getEquipmentBonuses>,
 ): number {
-  // stats.str already includes equipment affix bonuses; bonusDefense adds base armor defense + defense affixes
   return equipBonuses.bonusDefense + Math.floor(stats.str * 0.2);
 }
 
@@ -233,17 +235,16 @@ export function simulateCombat(
         let attackLabel = "attack";
 
         // Each equipped ability has an independent 12.5% chance to trigger per attack
-        // playerStats.str/dex/int/vit already include equipment bonuses
         for (const ab of selectedAbilities) {
           if (Math.random() < 0.125) {
             const statValue =
               ab.scalingStat === "str"
-                ? playerStats.str
+                ? playerStats.str + equipBonuses.str
                 : ab.scalingStat === "dex"
-                  ? playerStats.dex
+                  ? playerStats.dex + equipBonuses.dex
                   : ab.scalingStat === "int"
-                    ? playerStats.int
-                    : playerStats.vit;
+                    ? playerStats.int + equipBonuses.int
+                    : playerStats.vit + equipBonuses.vit;
 
             const abilityDmg = Math.floor(
               statValue * ab.damageMultiplier + playerDmgRange.min * 0.5,
@@ -253,7 +254,7 @@ export function simulateCombat(
           }
         }
 
-        // playerStats.critChance already includes equipment crit bonuses
+        // Apply crit
         let critText = "";
         if (isCrit(playerStats.critChance)) {
           const critMult = 1 + playerStats.critPower / 100;

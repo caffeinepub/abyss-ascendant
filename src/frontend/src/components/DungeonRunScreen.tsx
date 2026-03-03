@@ -3,7 +3,9 @@ import {
   AlertCircle,
   ChevronRight,
   Loader2,
+  PackagePlus,
   Skull,
+  Trash2,
   Trophy,
 } from "lucide-react";
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -29,7 +31,7 @@ interface DungeonRunScreenProps {
   onDeath: () => void;
 }
 
-type RunPhase = "running" | "complete" | "error";
+type RunPhase = "running" | "loot" | "complete" | "error";
 
 export default function DungeonRunScreen({
   character,
@@ -45,6 +47,10 @@ export default function DungeonRunScreen({
   const [displayedLog, setDisplayedLog] = useState<string[]>([]);
   const [logIndex, setLogIndex] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Track loot decisions: 'pending' | 'taken' | 'discarded' per item index
+  const [lootDecisions, setLootDecisions] = useState<
+    Record<number, "taken" | "discarded">
+  >({});
   const logEndRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
 
@@ -52,41 +58,50 @@ export default function DungeonRunScreen({
   const setCharacterHp = useSetCharacterHp();
 
   // Auto-scroll log
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally triggers on displayedLog array identity change for scroll
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [displayedLog]);
+  });
+
+  // Capture initial props in refs so the mount-only effect has no deps
+  const initialCharacterRef = useRef(character);
+  const initialDungeonLevelRef = useRef(dungeonLevel);
+  const initialDungeonModeRef = useRef(dungeonMode);
+  const initialMonstersRef = useRef(monsters);
 
   // Start combat immediately on mount
-  // biome-ignore lint/correctness/useExhaustiveDependencies: hasStarted ref ensures this runs once on mount; all deps are stable at mount time
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
+    const char = initialCharacterRef.current;
+    const level = initialDungeonLevelRef.current;
+    const mode = initialDungeonModeRef.current;
+    const initialMonsters = initialMonstersRef.current;
+
     // Use equippedAbilities (up to 3) for combat; fall back to abilities
     const combatAbilities =
-      character.equippedAbilities.length > 0
-        ? character.equippedAbilities
-        : character.abilities;
+      char.equippedAbilities.length > 0
+        ? char.equippedAbilities
+        : char.abilities;
 
     const result = simulateCombat(
       {
-        str: character.stats.str,
-        dex: character.stats.dex,
-        int: character.stats.int,
-        vit: character.stats.vit,
-        maxHp: character.stats.maxHp,
-        currentHp: character.stats.currentHp,
-        critChance: character.stats.critChance,
-        critPower: character.stats.critPower,
-        equippedItems: character.equippedItems,
+        str: char.stats.str,
+        dex: char.stats.dex,
+        int: char.stats.int,
+        vit: char.stats.vit,
+        maxHp: char.stats.maxHp,
+        currentHp: char.stats.currentHp,
+        critChance: char.stats.critChance,
+        critPower: char.stats.critPower,
+        equippedItems: char.equippedItems,
         abilities: combatAbilities,
-        characterClass: character.class,
+        characterClass: char.class,
       },
-      dungeonLevel,
-      dungeonMode === "hardcore",
-      character.realm,
-      monsters,
+      level,
+      mode === "hardcore",
+      char.realm,
+      initialMonsters,
     );
 
     setCombatResult(result);
@@ -99,7 +114,12 @@ export default function DungeonRunScreen({
   useEffect(() => {
     if (phase !== "running" || !combatResult) return;
     if (logIndex >= combatResult.log.length) {
-      setPhase("complete");
+      // If there's loot and it was a victory, show loot resolution phase first
+      if (combatResult.victory && combatResult.loot.length > 0) {
+        setPhase("loot");
+      } else {
+        setPhase("complete");
+      }
       return;
     }
     const timer = setTimeout(() => {
@@ -108,6 +128,19 @@ export default function DungeonRunScreen({
     }, 80);
     return () => clearTimeout(timer);
   }, [phase, combatResult, logIndex]);
+
+  const handleLootDecision = useCallback(
+    (index: number, decision: "taken" | "discarded") => {
+      setLootDecisions((prev) => ({ ...prev, [index]: decision }));
+    },
+    [],
+  );
+
+  const handleLootDone = useCallback(() => {
+    if (!combatResult) return;
+    // All undecided items are treated as discarded
+    setPhase("complete");
+  }, [combatResult]);
 
   const handleContinue = useCallback(async () => {
     if (!combatResult) return;
@@ -123,6 +156,15 @@ export default function DungeonRunScreen({
       return;
     }
 
+    // Only pass items the player chose to take
+    const takenLoot = combatResult.loot.filter(
+      (_, i) => lootDecisions[i] === "taken",
+    );
+    const resultWithTakenLoot: CombatResult = {
+      ...combatResult,
+      loot: takenLoot,
+    };
+
     const hpToSave = Math.min(remainingHp, character.stats.maxHp);
     submitDungeonResult.mutate({
       characterId,
@@ -137,9 +179,10 @@ export default function DungeonRunScreen({
       hp: BigInt(Math.floor(hpToSave)),
     });
 
-    onComplete(combatResult, newTotalXp, newLevel, remainingHp);
+    onComplete(resultWithTakenLoot, newTotalXp, newLevel, remainingHp);
   }, [
     combatResult,
+    lootDecisions,
     character,
     characterId,
     submitDungeonResult,
@@ -160,64 +203,209 @@ export default function DungeonRunScreen({
   const firstMonsterName =
     monsters && monsters.length > 0 ? monsters[0].name : null;
 
+  const allLootDecided =
+    combatResult?.loot.every((_, i) => lootDecisions[i] !== undefined) ?? false;
+
   return (
-    <div className="min-h-screen bg-surface-1 flex flex-col items-center justify-start p-4 pt-8">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-start p-4 pt-8 animate-fade-in">
       <div className="w-full max-w-2xl">
         {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="font-display text-3xl text-primary mb-1">
-            Dungeon Level {dungeonLevel}
+        <div className="text-center mb-5">
+          <h1 className="font-display text-2xl text-foreground font-bold mb-1">
+            <span className="text-ember">Level {dungeonLevel}</span> Encounter
           </h1>
           <p className="text-muted-foreground text-sm">
-            {character.name} — {character.realm}
+            {character.name}
             {firstMonsterName && (
-              <span className="ml-2 text-accent">vs {firstMonsterName}</span>
+              <>
+                {" "}
+                <span className="text-muted-foreground/50">vs</span>{" "}
+                <span className="text-dungeon-gold">{firstMonsterName}</span>
+              </>
             )}
           </p>
         </div>
 
         {/* Combat Log */}
-        <div className="bg-surface-2 rounded-lg border border-border">
-          <div className="p-4 h-80 overflow-y-auto font-mono text-sm">
+        <div className="bg-surface-1 rounded-xl border border-border/60 shadow-dungeon overflow-hidden">
+          <div className="px-1 py-0.5 border-b border-border/30 bg-surface-2/50 flex items-center gap-2">
+            <div className="flex gap-1 px-2 py-1">
+              <div className="w-2 h-2 rounded-full bg-destructive/50" />
+              <div className="w-2 h-2 rounded-full bg-dungeon-gold/50" />
+              <div className="w-2 h-2 rounded-full bg-health-high/50" />
+            </div>
+            <span className="text-[10px] text-muted-foreground/40 uppercase tracking-widest">
+              Combat Log
+            </span>
+          </div>
+          <div className="p-4 h-72 overflow-y-auto scrollbar-thin font-mono text-sm space-y-0.5">
             {displayedLog.map((line, i) => (
               <div
-                // biome-ignore lint/suspicious/noArrayIndexKey: combat log is append-only; lines never reorder
-                key={`log-${i}`}
-                className={`mb-1 ${
+                key={`log-${i}-${line.slice(0, 8)}`}
+                className={`leading-relaxed ${
                   line.includes("CRIT")
-                    ? "text-yellow-400 font-bold"
+                    ? "text-dungeon-gold font-bold"
                     : line.includes("defeated")
-                      ? "text-green-400"
+                      ? "text-health-high"
                       : line.includes("slain") || line.includes("dead")
-                        ? "text-red-400"
+                        ? "text-health-low"
                         : line.includes("XP")
                           ? "text-accent"
                           : line.includes("Loot")
-                            ? "text-purple-400"
+                            ? "text-rarity-rare"
                             : line.startsWith("Entering") ||
                                 line.startsWith("You are battling") ||
                                 line.startsWith("Dungeon")
-                              ? "text-primary font-semibold"
-                              : "text-foreground/80"
+                              ? "text-ember font-semibold"
+                              : "text-foreground/70"
                 }`}
               >
                 {line}
               </div>
             ))}
             {phase === "running" && (
-              <div className="flex items-center gap-2 text-muted-foreground mt-2">
+              <div className="flex items-center gap-2 text-muted-foreground/60 mt-2">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Combat in progress...</span>
+                <span className="text-xs">Combat in progress...</span>
               </div>
             )}
             <div ref={logEndRef} />
           </div>
 
-          {/* Result Banner */}
+          {/* Loot Resolution Phase */}
+          {phase === "loot" && combatResult && (
+            <div className="border-t border-border/40 p-4 bg-green-950/15">
+              <div className="flex items-center gap-3 mb-4">
+                <Trophy className="w-6 h-6 text-yellow-400" />
+                <div>
+                  <h3 className="font-display text-lg">Victory!</h3>
+                  <p className="text-sm text-muted-foreground">
+                    +{combatResult.xpEarned} XP earned &mdash; Choose your loot
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {combatResult.loot.map((item: GeneratedItem, i: number) => {
+                  const decision = lootDecisions[i];
+                  const rarityColor =
+                    item.rarity === "Legendary"
+                      ? "border-yellow-500 bg-yellow-950/20"
+                      : item.rarity === "Rare"
+                        ? "border-blue-500 bg-blue-950/20"
+                        : item.rarity === "Uncommon"
+                          ? "border-green-600 bg-green-950/20"
+                          : "border-border bg-surface-1";
+                  const rarityText =
+                    item.rarity === "Legendary"
+                      ? "text-yellow-400"
+                      : item.rarity === "Rare"
+                        ? "text-blue-400"
+                        : item.rarity === "Uncommon"
+                          ? "text-green-400"
+                          : "text-muted-foreground";
+
+                  return (
+                    <div
+                      key={item.id}
+                      data-ocid={`loot.item.${i + 1}`}
+                      className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-opacity ${rarityColor} ${decision === "discarded" ? "opacity-40" : "opacity-100"}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg">{item.icon}</span>
+                        <div className="min-w-0">
+                          <p
+                            className={`text-sm font-medium truncate ${rarityText}`}
+                          >
+                            {item.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.itemType}
+                            {item.baseDamage !== undefined &&
+                              ` • ${item.baseDamage} dmg`}
+                            {item.baseDefense !== undefined &&
+                              ` • ${item.baseDefense} def`}
+                            {item.affixes.length > 0 &&
+                              ` • ${item.affixes.map((a) => `${a.label} +${a.value}`).join(", ")}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      {decision === undefined ? (
+                        <div className="flex gap-1 ml-2 flex-shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-ocid={`loot.take_button.${i + 1}`}
+                            className="h-7 px-2 text-xs border-green-600 text-green-400 hover:bg-green-900/40"
+                            onClick={() => handleLootDecision(i, "taken")}
+                          >
+                            <PackagePlus className="w-3 h-3 mr-1" />
+                            Take
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            data-ocid={`loot.discard_button.${i + 1}`}
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-red-400"
+                            onClick={() => handleLootDecision(i, "discarded")}
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Discard
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                          <span
+                            className={`text-xs font-medium ${decision === "taken" ? "text-green-400" : "text-muted-foreground/50"}`}
+                          >
+                            {decision === "taken" ? "Taken" : "Discarded"}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-xs text-muted-foreground hover:text-foreground ml-1 underline"
+                            onClick={() =>
+                              setLootDecisions((prev) => {
+                                const next = { ...prev };
+                                delete next[i];
+                                return next;
+                              })
+                            }
+                          >
+                            undo
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  data-ocid="loot.done_button"
+                  onClick={handleLootDone}
+                  disabled={!allLootDecided}
+                  className="flex items-center gap-1"
+                >
+                  {allLootDecided ? (
+                    <>
+                      Continue <ChevronRight className="w-4 h-4" />
+                    </>
+                  ) : (
+                    "Decide all items to continue"
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Result Banner (no loot, or defeat) */}
           {(phase === "complete" || phase === "error") && combatResult && (
             <div
-              className={`border-t border-border p-4 ${
-                isVictory ? "bg-green-950/30" : "bg-red-950/30"
+              className={`border-t border-border/40 p-4 ${
+                isVictory ? "bg-green-950/20" : "bg-red-950/20"
               }`}
             >
               <div className="flex items-center gap-3 mb-3">
@@ -236,39 +424,13 @@ export default function DungeonRunScreen({
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     {isVictory
-                      ? `+${combatResult.xpEarned} XP earned • ${combatResult.loot.length} items found`
+                      ? `+${combatResult.xpEarned} XP earned`
                       : isSoftcoreDeath
                         ? "You survived with 1 HP. Rest and recover."
                         : "Your journey ends here."}
                   </p>
                 </div>
               </div>
-
-              {combatResult.loot.length > 0 && (
-                <div className="mb-3">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Items found:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {combatResult.loot.map((item: GeneratedItem) => (
-                      <span
-                        key={item.id}
-                        className={`text-xs px-2 py-1 rounded border ${
-                          item.rarity === "Legendary"
-                            ? "border-yellow-500 text-yellow-400"
-                            : item.rarity === "Rare"
-                              ? "border-blue-500 text-blue-400"
-                              : item.rarity === "Uncommon"
-                                ? "border-green-500 text-green-400"
-                                : "border-border text-muted-foreground"
-                        }`}
-                      >
-                        {item.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {phase === "error" && saveError && (
                 <div className="flex items-center gap-2 text-red-400 text-sm mb-3 bg-red-950/40 rounded p-2">
@@ -286,6 +448,7 @@ export default function DungeonRunScreen({
                 {phase === "complete" && (
                   <Button
                     size="sm"
+                    data-ocid="dungeon.continue_button"
                     onClick={handleContinue}
                     className="flex items-center gap-1"
                   >

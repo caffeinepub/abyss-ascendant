@@ -78,14 +78,14 @@ export default function InventoryScreen({
   ];
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-4">
+    <div className="max-w-4xl mx-auto p-4 space-y-4 animate-fade-in">
       {/* Header */}
-      <div className="bg-surface-1 border border-border rounded-xl p-5">
-        <h2 className="text-xl font-bold text-foreground font-display">
+      <div className="panel rounded-xl p-5">
+        <h2 className="font-display text-xl font-bold text-foreground">
           Inventory
         </h2>
-        <p className="text-sm text-muted mt-0.5">
-          Manage your equipment and stash. Gear is self-found — no vendors.
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Manage your equipment and stash. All gear is self-found — no vendors.
         </p>
       </div>
 
@@ -95,22 +95,24 @@ export default function InventoryScreen({
           <button
             type="button"
             key={tab.id}
+            data-ocid={`inventory.${tab.id}.tab`}
             onClick={() => {
               setActiveTab(tab.id);
               setSelectedItem(null);
             }}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
               activeTab === tab.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-surface-1 border border-border text-muted hover:text-foreground"
+                ? "text-primary-foreground"
+                : "bg-surface-1 border border-border/50 text-muted-foreground hover:text-foreground"
             }`}
+            style={
+              activeTab === tab.id ? { background: "oklch(0.65 0.17 38)" } : {}
+            }
           >
             {tab.label}
             <span
               className={`text-xs px-1.5 py-0.5 rounded-full ${
-                activeTab === tab.id
-                  ? "bg-primary-foreground/20"
-                  : "bg-surface-2"
+                activeTab === tab.id ? "bg-white/20" : "bg-surface-2"
               }`}
             >
               {tab.count}
@@ -121,62 +123,75 @@ export default function InventoryScreen({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Item Grid */}
-        <div className="md:col-span-2 bg-surface-1 border border-border rounded-xl p-4">
+        <div className="md:col-span-2 panel rounded-xl p-4">
           {currentItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-muted/50">
-              <div className="text-4xl mb-2">
+            <div
+              data-ocid={`inventory.${activeTab}.empty_state`}
+              className="flex flex-col items-center justify-center h-48 text-muted-foreground/30"
+            >
+              <div className="text-4xl mb-3 opacity-50">
                 {activeTab === "inventory"
                   ? "🎒"
                   : activeTab === "stash"
                     ? "📦"
                     : "⚔️"}
               </div>
-              <div className="text-sm">
+              <div className="text-sm font-medium">
                 {activeTab === "inventory"
                   ? "No items in inventory"
                   : activeTab === "stash"
                     ? "Stash is empty"
                     : "Nothing equipped"}
               </div>
-              <div className="text-xs mt-1">Find gear by running dungeons!</div>
+              <div className="text-xs mt-1 opacity-60">
+                Find gear by running dungeons!
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {currentItems.map((item) => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  onClick={() => handleItemClick(item)}
-                  selected={selectedItem?.id === item.id}
-                />
+              {currentItems.map((item, i) => (
+                <div key={item.id} data-ocid={`inventory.item.${i + 1}`}>
+                  <ItemCard
+                    item={item}
+                    onClick={() => handleItemClick(item)}
+                    selected={selectedItem?.id === item.id}
+                  />
+                </div>
               ))}
             </div>
           )}
         </div>
 
         {/* Item Detail / Actions */}
-        <div className="bg-surface-1 border border-border rounded-xl p-4">
+        <div className="panel rounded-xl p-4">
           {selectedItem ? (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
                 Selected Item
               </h3>
               <ItemCard item={selectedItem} />
 
-              <div className="space-y-2 pt-2 border-t border-border">
+              <div className="space-y-2 pt-2 border-t border-border/30">
                 {isEquipped ? (
                   <button
                     type="button"
+                    data-ocid="inventory.unequip.button"
                     onClick={handleUnequip}
-                    className="w-full py-2 rounded-lg bg-destructive/20 text-destructive hover:bg-destructive/30 text-sm font-semibold transition-all"
+                    className="w-full py-2 rounded-lg bg-destructive/15 text-destructive hover:bg-destructive/25 text-sm font-semibold transition-all border border-destructive/25"
                   >
                     Unequip
                   </button>
                 ) : (
                   <button
                     type="button"
+                    data-ocid="inventory.equip.button"
                     onClick={handleEquip}
-                    className="w-full py-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 text-sm font-semibold transition-all"
+                    className="w-full py-2 rounded-lg text-sm font-semibold transition-opacity"
+                    style={{
+                      background: "oklch(0.65 0.17 38 / 0.25)",
+                      color: "oklch(0.65 0.17 38)",
+                      border: "1px solid oklch(0.65 0.17 38 / 0.35)",
+                    }}
                   >
                     Equip
                   </button>
@@ -186,16 +201,18 @@ export default function InventoryScreen({
                   (isInStash ? (
                     <button
                       type="button"
+                      data-ocid="inventory.move-from-stash.button"
                       onClick={handleMoveFromStash}
-                      className="w-full py-2 rounded-lg bg-surface-2 text-muted hover:bg-surface-2/80 text-sm font-semibold transition-all"
+                      className="w-full py-2 rounded-lg bg-surface-2 text-muted-foreground hover:text-foreground text-sm font-semibold transition-all border border-border/30"
                     >
                       Move to Inventory
                     </button>
                   ) : (
                     <button
                       type="button"
+                      data-ocid="inventory.move-to-stash.button"
                       onClick={handleMoveToStash}
-                      className="w-full py-2 rounded-lg bg-surface-2 text-muted hover:bg-surface-2/80 text-sm font-semibold transition-all"
+                      className="w-full py-2 rounded-lg bg-surface-2 text-muted-foreground hover:text-foreground text-sm font-semibold transition-all border border-border/30"
                     >
                       Move to Stash
                     </button>
@@ -203,8 +220,8 @@ export default function InventoryScreen({
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-muted/50 py-8">
-              <div className="text-3xl mb-2">👆</div>
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground/25 py-8">
+              <div className="text-3xl mb-2 opacity-50">🗡️</div>
               <div className="text-sm text-center">
                 Select an item to see actions
               </div>

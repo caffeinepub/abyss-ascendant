@@ -22,6 +22,55 @@ interface CharacterSheetProps {
   onUpdateEquippedAbilities: (abilities: string[]) => void;
 }
 
+const CLASS_ICONS: Record<string, string> = {
+  Warrior: "⚔️",
+  Rogue: "🗡️",
+  Mage: "🔮",
+};
+
+const CLASS_GRADIENTS: Record<string, string> = {
+  Warrior:
+    "linear-gradient(135deg, oklch(0.18 0.05 38) 0%, oklch(0.12 0.03 38) 100%)",
+  Rogue:
+    "linear-gradient(135deg, oklch(0.18 0.05 180) 0%, oklch(0.12 0.03 180) 100%)",
+  Mage: "linear-gradient(135deg, oklch(0.18 0.05 298) 0%, oklch(0.12 0.03 298) 100%)",
+};
+
+const STAT_CONFIG = [
+  {
+    key: "str" as const,
+    label: "Strength",
+    abbr: "STR",
+    icon: <Sword className="w-3.5 h-3.5" />,
+    color: "text-orange-400",
+    desc: "Physical damage & power",
+  },
+  {
+    key: "dex" as const,
+    label: "Dexterity",
+    abbr: "DEX",
+    icon: <Zap className="w-3.5 h-3.5" />,
+    color: "text-teal-400",
+    desc: "Speed, crit & initiative",
+  },
+  {
+    key: "int" as const,
+    label: "Intelligence",
+    abbr: "INT",
+    icon: <Star className="w-3.5 h-3.5" />,
+    color: "text-violet-400",
+    desc: "Spell power & magic damage",
+  },
+  {
+    key: "vit" as const,
+    label: "Vitality",
+    abbr: "VIT",
+    icon: <Heart className="w-3.5 h-3.5" />,
+    color: "text-rose-400",
+    desc: "Max life & resilience",
+  },
+];
+
 export default function CharacterSheet({
   character,
   onUpdateBaseStats,
@@ -50,7 +99,6 @@ export default function CharacterSheet({
     newTotalSpent: number;
   }) => {
     try {
-      // 1. Update stats on backend (increments baseStats)
       await updateStatsMutation.mutateAsync({
         characterId: character.id,
         statsUpdate: {
@@ -60,14 +108,10 @@ export default function CharacterSheet({
           vitIncrease: BigInt(statsUpdate.vitIncrease),
         },
       });
-
-      // 2. Record total spent points on backend
       await spendStatPointsMutation.mutateAsync({
         characterId: character.id,
         pointsSpent: BigInt(statsUpdate.newTotalSpent),
       });
-
-      // 3. Update local state immediately so UI reflects changes without waiting for re-fetch
       const newBaseStats: BaseStats = {
         str: character.baseStats.str + statsUpdate.strIncrease,
         dex: character.baseStats.dex + statsUpdate.dexIncrease,
@@ -83,7 +127,6 @@ export default function CharacterSheet({
 
   const handleAbilityConfirm = async (selectedAbilityNames: string[]) => {
     try {
-      // Convert ability names to backend Ability objects
       const abilityObjects: BackendAbility[] = selectedAbilityNames
         .map((name) => {
           const found = ABILITIES.find((a) => a.name === name);
@@ -102,43 +145,14 @@ export default function CharacterSheet({
         characterId: character.id,
         abilities: abilityObjects,
       });
-
       onUpdateEquippedAbilities(selectedAbilityNames);
       setShowAbilityModal(false);
     } catch (err) {
       console.error("Failed to equip abilities:", err);
-      // Still update locally even if backend fails
       onUpdateEquippedAbilities(selectedAbilityNames);
       setShowAbilityModal(false);
     }
   };
-
-  const statRows = [
-    {
-      label: "STR",
-      value: character.stats.str,
-      icon: <Sword className="w-4 h-4" />,
-      color: "text-orange-400",
-    },
-    {
-      label: "DEX",
-      value: character.stats.dex,
-      icon: <Zap className="w-4 h-4" />,
-      color: "text-green-400",
-    },
-    {
-      label: "INT",
-      value: character.stats.int,
-      icon: <Star className="w-4 h-4" />,
-      color: "text-blue-400",
-    },
-    {
-      label: "VIT",
-      value: character.stats.vit,
-      icon: <Heart className="w-4 h-4" />,
-      color: "text-red-400",
-    },
-  ];
 
   const equippedAbilityObjects = character.equippedAbilities
     .map((name) => ABILITIES.find((a) => a.name === name))
@@ -149,62 +163,74 @@ export default function CharacterSheet({
     spendStatPointsMutation.isPending ||
     equipAbilitiesMutation.isPending;
 
+  const classIcon = CLASS_ICONS[character.class] ?? "⚔️";
+  const classGradient =
+    CLASS_GRADIENTS[character.class] ?? CLASS_GRADIENTS.Warrior;
+
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-4">
-      {/* Character header */}
-      <div className="bg-surface-1 rounded-lg border border-border p-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-lg overflow-hidden border border-border/50 bg-surface-2 flex-shrink-0">
-            {character.class === "Warrior" && (
-              <img
-                src="/assets/generated/class-warrior.dim_256x256.png"
-                alt="Warrior"
-                className="w-full h-full object-cover"
-              />
-            )}
-            {character.class === "Rogue" && (
-              <img
-                src="/assets/generated/class-rogue.dim_256x256.png"
-                alt="Rogue"
-                className="w-full h-full object-cover"
-              />
-            )}
-            {character.class === "Mage" && (
-              <img
-                src="/assets/generated/class-mage.dim_256x256.png"
-                alt="Mage"
-                className="w-full h-full object-cover"
-              />
-            )}
+    <div className="max-w-2xl mx-auto p-4 space-y-4 animate-fade-in">
+      {/* ── Character header ──────────────────────────────────────── */}
+      <div className="panel-ember rounded-xl p-4 relative overflow-hidden">
+        {/* Subtle background glow */}
+        <div
+          className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-5 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle, oklch(0.65 0.17 38), transparent)",
+          }}
+        />
+        <div className="flex items-center gap-4 relative">
+          <div
+            className="w-16 h-16 rounded-xl border border-border/50 flex-shrink-0 shadow-card flex items-center justify-center text-2xl"
+            style={{ background: classGradient }}
+          >
+            {classIcon}
           </div>
-          <div>
-            <h2 className="font-display font-bold text-foreground text-lg">
+          <div className="flex-1 min-w-0">
+            <h2 className="font-display font-bold text-foreground text-xl leading-tight">
               {character.name}
             </h2>
-            <p className="text-sm text-muted-foreground">
-              Level {character.level} {character.class}
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Level {character.level}{" "}
+              <span className="text-ember">{character.class}</span>
+              {" · "}
+              <span
+                className={
+                  character.realm === "Hardcore"
+                    ? "text-destructive"
+                    : "text-primary/70"
+                }
+              >
+                {character.realm}
+              </span>
             </p>
           </div>
           {isSaving && (
-            <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Loader2 className="w-3 h-3 animate-spin" />
-              Saving...
+              <span className="hidden sm:inline">Saving...</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="bg-surface-1 rounded-lg border border-border p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
-            Base Stats
+      {/* ── Stats ─────────────────────────────────────────────────── */}
+      <div className="panel rounded-xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+            Base Statistics
           </h3>
           {unspentStatPoints > 0 && (
             <button
               type="button"
+              data-ocid="character.stat.open_modal_button"
               onClick={() => setShowLevelUpModal(true)}
-              className="flex items-center gap-1 text-xs bg-accent/20 text-accent border border-accent/30 px-2 py-1 rounded hover:bg-accent/30 transition-colors"
+              className="flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 font-semibold transition-all animate-ember-pulse"
+              style={{
+                background: "oklch(0.65 0.17 38 / 0.2)",
+                color: "oklch(0.65 0.17 38)",
+                border: "1px solid oklch(0.65 0.17 38 / 0.35)",
+              }}
             >
               <Plus className="w-3 h-3" />
               {unspentStatPoints} point{unspentStatPoints !== 1 ? "s" : ""} to
@@ -212,47 +238,75 @@ export default function CharacterSheet({
             </button>
           )}
         </div>
+
         <div className="grid grid-cols-2 gap-2">
-          {statRows.map(({ label, value, icon, color }) => (
+          {STAT_CONFIG.map(({ key, abbr, icon, color, desc }) => (
             <div
-              key={label}
-              className="flex items-center gap-2 bg-surface-2 rounded p-2"
+              key={key}
+              className="flex items-center gap-3 bg-surface-2 rounded-lg px-3 py-2.5 border border-border/40"
             >
               <span className={color}>{icon}</span>
-              <span className="text-xs text-muted-foreground w-8">{label}</span>
-              <span className="font-bold text-foreground ml-auto">{value}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                    {abbr}
+                  </span>
+                  <span className="font-bold text-foreground text-sm">
+                    {character.stats[key]}
+                  </span>
+                </div>
+                <div className="text-[10px] text-muted-foreground/50 truncate">
+                  {desc}
+                </div>
+              </div>
             </div>
           ))}
         </div>
-        <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Max HP</span>
-          <span className="font-bold text-foreground">
-            {character.stats.maxHp}
-          </span>
-        </div>
-        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Stat points</span>
-          <span>
-            {character.totalStatPointsSpent} spent ·{" "}
-            <span
-              className={unspentStatPoints > 0 ? "text-accent font-medium" : ""}
+
+        {/* HP & crit */}
+        <div className="mt-3 pt-3 border-t border-border/30 grid grid-cols-3 gap-3 text-xs">
+          <div className="text-center">
+            <div className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+              Max HP
+            </div>
+            <div className="font-bold text-rose-400 text-sm mt-0.5">
+              {character.stats.maxHp}
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+              Crit
+            </div>
+            <div className="font-bold text-dungeon-gold text-sm mt-0.5">
+              {character.stats.critChance}%
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+              Points
+            </div>
+            <div
+              className={`font-bold text-sm mt-0.5 ${unspentStatPoints > 0 ? "text-primary" : "text-muted-foreground"}`}
             >
-              {unspentStatPoints} available
-            </span>
-          </span>
+              {unspentStatPoints > 0
+                ? `+${unspentStatPoints}`
+                : character.totalStatPointsSpent}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Abilities */}
-      <div className="bg-surface-1 rounded-lg border border-border p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+      {/* ── Abilities ─────────────────────────────────────────────── */}
+      <div className="panel rounded-xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
             Abilities
           </h3>
           <button
             type="button"
+            data-ocid="character.abilities.open_modal_button"
             onClick={() => setShowAbilityModal(true)}
-            className="flex items-center gap-1 text-xs bg-surface-2 text-muted-foreground border border-border px-2 py-1 rounded hover:text-foreground hover:border-foreground/30 transition-colors"
+            className="flex items-center gap-1.5 text-xs bg-surface-2 text-muted-foreground border border-border/50 px-2.5 py-1 rounded-lg hover:text-foreground hover:border-border transition-all"
           >
             <Zap className="w-3 h-3" />
             {equippedAbilityObjects.length > 0 ? "Manage" : "Unlock"}
@@ -260,37 +314,43 @@ export default function CharacterSheet({
         </div>
 
         <div className="space-y-2">
-          {(["slot-1", "slot-2", "slot-3"] as const).map((slotId, i) => {
+          {(["slot-0", "slot-1", "slot-2"] as const).map((slotKey, i) => {
             const ability = equippedAbilityObjects[i];
+            const hasPoint = availableAbilityPoints > i;
             return (
               <div
-                key={slotId}
-                className={`flex items-center gap-2 rounded p-2 border ${
+                key={slotKey}
+                className={`flex items-center gap-3 rounded-lg p-2.5 border transition-all ${
                   ability
                     ? "bg-surface-2 border-accent/20"
-                    : "bg-surface-2/30 border-border/30 border-dashed"
+                    : hasPoint
+                      ? "bg-surface-2/40 border-border/30 border-dashed"
+                      : "bg-surface-2/20 border-border/15 border-dashed opacity-40"
                 }`}
               >
                 {ability ? (
                   <>
-                    <Zap className="w-4 h-4 text-accent flex-shrink-0" />
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-base"
+                      style={{ background: "oklch(0.35 0.16 298 / 0.2)" }}
+                    >
+                      {ability.icon ?? "⚡"}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-semibold text-foreground truncate">
                         {ability.name}
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">
+                      <div className="text-[11px] text-muted-foreground truncate">
                         {ability.description}
                       </div>
                     </div>
-                    <div className="text-xs text-orange-400 flex-shrink-0">
+                    <div className="text-xs text-ember font-bold flex-shrink-0">
                       {(ability.damageMultiplier * 100).toFixed(0)}%
                     </div>
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground/40 mx-auto">
-                    {availableAbilityPoints > i
-                      ? "— Available slot —"
-                      : "— Locked —"}
+                  <span className="text-xs text-muted-foreground/40 mx-auto py-1">
+                    {hasPoint ? "— Available Slot —" : "— Locked —"}
                   </span>
                 )}
               </div>
@@ -298,27 +358,42 @@ export default function CharacterSheet({
           })}
         </div>
 
-        <p className="text-xs text-muted-foreground mt-2">
-          {availableAbilityPoints} ability slot
-          {availableAbilityPoints !== 1 ? "s" : ""} unlocked · 12.5% trigger
-          chance
+        <p className="text-[11px] text-muted-foreground/50 mt-2.5">
+          {availableAbilityPoints} slot{availableAbilityPoints !== 1 ? "s" : ""}{" "}
+          unlocked · 12.5% trigger chance per round
         </p>
       </div>
 
-      {/* Equipment summary */}
-      <div className="bg-surface-1 rounded-lg border border-border p-4">
-        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-3">
+      {/* ── Equipment ─────────────────────────────────────────────── */}
+      <div className="panel rounded-xl p-4">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
           Equipment
         </h3>
         {character.equippedItems.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No items equipped.</p>
+          <div
+            data-ocid="character.equipment.empty_state"
+            className="flex flex-col items-center justify-center py-8 text-muted-foreground/30"
+          >
+            <Shield className="w-8 h-8 mb-2" />
+            <p className="text-xs">No items equipped.</p>
+            <p className="text-[11px] mt-0.5 opacity-70">
+              Find gear in the dungeon and equip via Inventory.
+            </p>
+          </div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {character.equippedItems.map((item) => (
-              <div key={item.id} className="flex items-center gap-2 text-xs">
-                <Shield className="w-3 h-3 text-muted-foreground" />
-                <span className="text-foreground">{item.name}</span>
-                <span className="text-muted-foreground ml-auto">
+              <div
+                key={item.id}
+                className="flex items-center gap-2.5 text-xs bg-surface-2 rounded-lg px-3 py-2 border border-border/30"
+              >
+                <span className="text-base leading-none">
+                  {item.icon ?? "🗡️"}
+                </span>
+                <span className="text-foreground font-medium flex-1 min-w-0 truncate">
+                  {item.name}
+                </span>
+                <span className="text-muted-foreground/60 flex-shrink-0">
                   {item.itemType}
                 </span>
               </div>
