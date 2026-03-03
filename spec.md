@@ -1,27 +1,24 @@
 # Abyss Ascendant
 
 ## Current State
-- XPBar component has a "compact" variant used in Navigation.tsx that shows a filled progress bar BUT also renders `{Math.floor(progress)}%` text next to it
-- DungeonRunScreen starts combat simulation synchronously on mount (no delay there), but the `handleContinue` function calls `submitDungeonResult.mutate` and `setCharacterHp.mutate` (backend ICP update calls) — these are fire-and-forget but the ~10 second delay is likely caused by `handleStartDungeon` in App.tsx triggering a state change that re-renders DungeonRunScreen, which involves backend query calls before showing anything OR it's waiting on the `useActor` hook to re-initialize
-- The combat simulation itself runs synchronously in `useEffect` on mount, so the log should appear immediately — the delay may be coming from the App.tsx rendering cycle awaiting actor availability, or from the dungeon screen mount being delayed by React reconciliation after navigation
+Version 57 introduced the XP bar fix. However, the `useCreateCharacter` hook in `useQueries.ts` regressed — the stale closure fix from v54 was not properly applied. The comment said "Re-read actor from query cache" but the code still did `const actor = _actor` (a plain copy of the closed-over value), meaning it used a potentially stale actor reference captured at render time instead of the live value.
+
+This causes:
+1. "Failed to create character" error on the character creation final step
+2. No characters shown on the select screen (related actor initialization race)
 
 ## Requested Changes (Diff)
 
 ### Add
-- Nothing new
+- Nothing new added.
 
 ### Modify
-1. **XPBar.tsx compact variant**: Remove the `{Math.floor(progress)}%` percentage text. Replace with a cleaner label showing `{xpIntoLevel} / {xpNeeded} XP` in smaller text, or simply widen the bar so the visual speaks for itself. No percentage anywhere.
-2. **DungeonRunScreen.tsx**: Pre-compute the combat result BEFORE transitioning to the dungeon screen, so by the time the component mounts, the result is already available and the log animation begins instantly. Pass the pre-computed result as a prop. This eliminates the React mount → useEffect → simulateCombat → setState cycle delay.
-   - In App.tsx `handleStartDungeon`: run `simulateCombat` with character stats immediately and pass the result to DungeonRunScreen
-   - In DungeonRunScreen: accept an optional `preComputedResult` prop; if provided, initialize state from it directly (skip the useEffect combat simulation)
-   - Backend calls (submitDungeonResult, setCharacterHp) remain async fire-and-forget — no change
+- `useCreateCharacter` in `useQueries.ts`: Read the actor fresh from the query client cache at mutation call time, using `queryClient.getQueryData(["actor", identity?.getPrincipal().toString()])`. This requires importing `useInternetIdentity` in this file.
 
 ### Remove
-- The `{Math.floor(progress)}%` text from the compact XPBar variant
+- Remove the stale `const { actor: _actor } = useActor()` pattern from `useCreateCharacter`.
 
 ## Implementation Plan
-1. Edit `XPBar.tsx`: In the compact branch, remove the `<span>` that renders `{Math.floor(progress)}%`. Optionally add a small `xpIntoLevel/xpNeeded` label if it fits, otherwise just show bar + level.
-2. Edit `App.tsx`: In `handleStartDungeon`, compute combat result immediately using `simulateCombat` with current character stats. Store it in state (`preComputedCombatResult`). Pass it to `DungeonRunScreen`.
-3. Edit `DungeonRunScreen.tsx`: Accept `preComputedResult?: CombatResult` prop. In the mount useEffect, if `preComputedResult` is provided, use it directly instead of calling `simulateCombat`. This removes the computation lag from the dungeon screen mount.
-4. Typecheck and build to confirm no regressions.
+1. Import `useInternetIdentity` in `useQueries.ts`
+2. Replace `useActor()` in `useCreateCharacter` with `useInternetIdentity()` to get the identity (for the cache key)
+3. Inside `mutationFn`, use `queryClient.getQueryData(["actor", identity?.getPrincipal().toString()])` to get the live actor at call time

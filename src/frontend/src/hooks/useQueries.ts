@@ -9,6 +9,7 @@ import type {
   UserProfile,
 } from "../backend";
 import { useActor } from "./useActor";
+import { useInternetIdentity } from "./useInternetIdentity";
 
 export class CharacterLimitReachedError extends Error {
   constructor() {
@@ -49,7 +50,7 @@ export function useGetCharacter(characterId: CharacterId | null) {
 }
 
 export function useCreateCharacter() {
-  const { actor: _actor } = useActor();
+  const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -63,8 +64,12 @@ export function useCreateCharacter() {
       vit: bigint;
       equippedAbilities: Ability[];
     }) => {
-      // Re-read actor from the query cache at call time to avoid stale closure.
-      const actor = _actor;
+      // Read actor fresh from query cache at call time to avoid stale closure.
+      const actorQueryKey = ["actor", identity?.getPrincipal().toString()];
+      const actor =
+        queryClient.getQueryData<import("../backend").backendInterface>(
+          actorQueryKey,
+        );
       if (!actor) throw new Error("Actor not available");
       const result = await actor.createCharacter(params);
       if (result.__kind__ === "err") {
