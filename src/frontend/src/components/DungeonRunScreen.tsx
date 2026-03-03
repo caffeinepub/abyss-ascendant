@@ -285,9 +285,32 @@ export default function DungeonRunScreen({
                 </div>
               </div>
 
+              {/* Inventory full warning */}
+              {character.inventory.length >= 10 && (
+                <div
+                  data-ocid="loot.inventory_full.error_state"
+                  className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-center gap-2"
+                >
+                  <span>⚠️</span>
+                  <span>
+                    Inventory full (10/10). You cannot take any more items.
+                    Equip or discard existing items first.
+                  </span>
+                </div>
+              )}
+
               <div className="space-y-2 mb-4">
                 {combatResult.loot.map((item: GeneratedItem, i: number) => {
                   const decision = lootDecisions[i];
+                  // Count how many "taken" decisions have been made so far (up to this index)
+                  const takenCountSoFar = Object.values(lootDecisions).filter(
+                    (d) => d === "taken",
+                  ).length;
+                  const inventoryAfterTaken =
+                    character.inventory.length + takenCountSoFar;
+                  const inventoryWouldBeFull =
+                    inventoryAfterTaken >= 10 && decision === undefined;
+
                   const rarityColor =
                     item.rarity === "Legendary"
                       ? "border-yellow-500 bg-yellow-950/20"
@@ -337,11 +360,23 @@ export default function DungeonRunScreen({
                             size="sm"
                             variant="outline"
                             data-ocid={`loot.take_button.${i + 1}`}
-                            className="h-7 px-2 text-xs border-green-600 text-green-400 hover:bg-green-900/40"
+                            className="h-7 px-2 text-xs border-green-600 text-green-400 hover:bg-green-900/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled={inventoryWouldBeFull}
+                            title={
+                              inventoryWouldBeFull
+                                ? "Inventory full (10/10)"
+                                : undefined
+                            }
                             onClick={() => handleLootDecision(i, "taken")}
                           >
-                            <PackagePlus className="w-3 h-3 mr-1" />
-                            Take
+                            {inventoryWouldBeFull ? (
+                              "Inv. Full"
+                            ) : (
+                              <>
+                                <PackagePlus className="w-3 h-3 mr-1" />
+                                Take
+                              </>
+                            )}
                           </Button>
                           <Button
                             size="sm"

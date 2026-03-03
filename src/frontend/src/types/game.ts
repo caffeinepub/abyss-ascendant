@@ -131,7 +131,7 @@ export function calculateUnspentStatPoints(
 
 /**
  * Apply class stat bonus to base stats.
- * Warrior: +3 STR, Rogue: +3 DEX, Mage: +3 INT
+ * Warrior: +6 STR, Rogue: +3 DEX, Mage: +3 INT
  */
 export function applyClassStatBonus(
   stats: BaseStats,

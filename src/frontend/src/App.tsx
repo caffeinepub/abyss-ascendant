@@ -182,6 +182,29 @@ function AppContent() {
       setIsInDungeon(false);
       setPendingMonsters([]);
 
+      // Write inventory to localStorage synchronously BEFORE firing any
+      // mutations that trigger query invalidation / re-fetches — this
+      // ensures buildLocalCharacter reads the correct inventory even if
+      // the React state update hasn't been batched yet.
+      if (
+        result.loot.length > 0 &&
+        character &&
+        selectedCharacterIndex !== null
+      ) {
+        const storageKey = `abyss_char_${selectedCharacterIndex}`;
+        try {
+          const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
+          const currentInv: GeneratedItem[] = existing.inventory || [];
+          const newInv = [...currentInv, ...result.loot].slice(0, 10);
+          localStorage.setItem(
+            storageKey,
+            JSON.stringify({ ...existing, inventory: newInv }),
+          );
+        } catch {
+          // ignore storage errors
+        }
+      }
+
       updateAfterDungeon(newXp, newLevel, remainingHp);
 
       if (selectedCharacterIndex !== null) {
@@ -189,6 +212,13 @@ function AppContent() {
           characterId: selectedCharacterIndex,
           hp: BigInt(Math.floor(remainingHp)),
         });
+      }
+
+      // Update React state for inventory (localStorage already written above)
+      if (result.loot.length > 0 && character) {
+        const currentInventory = character.inventory ?? [];
+        const newInventory = [...currentInventory, ...result.loot].slice(0, 10);
+        updateEquipment(character.equippedItems, newInventory, []);
       }
 
       if (result.loot.length > 0) {
@@ -204,6 +234,7 @@ function AppContent() {
     [
       character,
       updateAfterDungeon,
+      updateEquipment,
       selectedCharacterIndex,
       setCharacterHpMutation,
     ],
@@ -359,7 +390,29 @@ function AppContent() {
         const str = Number(backendChar.baseStats.str);
         const dex = Number(backendChar.baseStats.dex);
         const int_ = Number(backendChar.baseStats.int);
-        const maxHp = Math.max(10, vit * 10 + 50);
+
+        // Load equipment from localStorage to include affix HP bonuses in maxHp
+        const storedKey = `abyss_char_${index}`;
+        let equipBonusHp = 0;
+        let equipVitBonus = 0;
+        try {
+          const storedRaw = localStorage.getItem(storedKey);
+          if (storedRaw) {
+            const storedData = JSON.parse(storedRaw);
+            for (const item of storedData.equippedItems || []) {
+              for (const affix of item.affixes || []) {
+                if (affix.stat === "hp") equipBonusHp += affix.value;
+                if (affix.stat === "vit") equipVitBonus += affix.value;
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+        const maxHp = Math.max(
+          10,
+          (vit + equipVitBonus) * 10 + 50 + equipBonusHp,
+        );
         const currentHp = Math.min(
           Number(backendChar.advancedStats.currentHP),
           maxHp,
@@ -488,34 +541,14 @@ function AppContent() {
               const newInventory = character.inventory.filter(
                 (i) => i.id !== item.id,
               );
-              handleUpdateEquipment(newEquipped, newInventory, character.stash);
+              handleUpdateEquipment(newEquipped, newInventory, []);
             }}
             onUnequipItem={(item) => {
               const newEquipped = character.equippedItems.filter(
                 (e) => e.id !== item.id,
               );
-              const newInventory = [...character.inventory, item];
-              handleUpdateEquipment(newEquipped, newInventory, character.stash);
-            }}
-            onMoveToStash={(item) => {
-              const newInventory = character.inventory.filter(
-                (i) => i.id !== item.id,
-              );
-              const newStash = [...character.stash, item];
-              handleUpdateEquipment(
-                character.equippedItems,
-                newInventory,
-                newStash,
-              );
-            }}
-            onMoveFromStash={(item) => {
-              const newStash = character.stash.filter((i) => i.id !== item.id);
-              const newInventory = [...character.inventory, item];
-              handleUpdateEquipment(
-                character.equippedItems,
-                newInventory,
-                newStash,
-              );
+              const newInventory = [...character.inventory, item].slice(0, 10);
+              handleUpdateEquipment(newEquipped, newInventory, []);
             }}
           />
         )}

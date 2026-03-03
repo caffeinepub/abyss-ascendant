@@ -11,8 +11,6 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 import MixinStorage "blob-storage/Mixin";
 
-
-
 actor {
   let maxStats = 100;
   let maxLevel = 50;
@@ -192,7 +190,7 @@ actor {
                   let updatedCharacter : Character = {
                     slot.character with xp = result.xpEarned;
                     level = result.newLevel;
-                    totalStatPointsEarned = (result.newLevel - 1);
+                    totalStatPointsEarned = Nat.max(slot.character.totalStatPointsEarned, result.newLevel - 1);
                   };
                   { slot with character = updatedCharacter };
                 } else {
@@ -351,9 +349,6 @@ actor {
         let character = switch (characterSlots.toArray().find(func(slot) { slot.id == characterId })) {
           case (null) { return #err(#characterNotFound) };
           case (?slot) { slot.character };
-        };
-        if (hp > character.advancedStats.maxHP) {
-          return #err(#maxHPExceeded);
         };
         let updatedSlotsArray = characterSlots.toArray().map(
           func(slot) {
@@ -549,4 +544,3 @@ actor {
     };
   };
 };
-

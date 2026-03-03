@@ -3,34 +3,29 @@ import type { GeneratedItem } from "../engine/lootGenerator";
 import type { LocalCharacter } from "../types/game";
 import { ItemCard } from "./ItemTooltip";
 
+const MAX_INVENTORY = 10;
+
 interface InventoryScreenProps {
   character: LocalCharacter;
   onEquipItem: (item: GeneratedItem) => void;
   onUnequipItem: (item: GeneratedItem) => void;
-  onMoveToStash: (item: GeneratedItem) => void;
-  onMoveFromStash: (item: GeneratedItem) => void;
 }
 
-type Tab = "inventory" | "stash" | "equipped";
+type Tab = "inventory" | "equipped";
 
 export default function InventoryScreen({
   character,
   onEquipItem,
   onUnequipItem,
-  onMoveToStash,
-  onMoveFromStash,
 }: InventoryScreenProps) {
   const [activeTab, setActiveTab] = useState<Tab>("inventory");
   const [selectedItem, setSelectedItem] = useState<GeneratedItem | null>(null);
 
   const equippedItemsArray: GeneratedItem[] = character.equippedItems ?? [];
+  const inventoryItems = character.inventory.slice(0, MAX_INVENTORY);
 
   const currentItems: GeneratedItem[] =
-    activeTab === "inventory"
-      ? character.inventory
-      : activeTab === "stash"
-        ? character.stash
-        : equippedItemsArray;
+    activeTab === "inventory" ? inventoryItems : equippedItemsArray;
 
   function handleItemClick(item: GeneratedItem) {
     setSelectedItem((prev) => (prev?.id === item.id ? null : item));
@@ -48,32 +43,19 @@ export default function InventoryScreen({
     setSelectedItem(null);
   }
 
-  function handleMoveToStash() {
-    if (!selectedItem) return;
-    onMoveToStash(selectedItem);
-    setSelectedItem(null);
-  }
-
-  function handleMoveFromStash() {
-    if (!selectedItem) return;
-    onMoveFromStash(selectedItem);
-    setSelectedItem(null);
-  }
-
   const isEquipped = selectedItem
     ? equippedItemsArray.some((i) => i.id === selectedItem.id)
     : false;
-  const isInStash = selectedItem
-    ? character.stash.some((i) => i.id === selectedItem.id)
-    : false;
+
+  const inventoryCount = inventoryItems.length;
+  const inventoryFull = inventoryCount >= MAX_INVENTORY;
 
   const TABS: { id: Tab; label: string; count: number }[] = [
     {
       id: "inventory",
       label: "🎒 Inventory",
-      count: character.inventory.length,
+      count: inventoryCount,
     },
-    { id: "stash", label: "📦 Stash", count: character.stash.length },
     { id: "equipped", label: "⚔️ Equipped", count: equippedItemsArray.length },
   ];
 
@@ -81,12 +63,25 @@ export default function InventoryScreen({
     <div className="max-w-4xl mx-auto p-4 space-y-4 animate-fade-in">
       {/* Header */}
       <div className="panel rounded-xl p-5">
-        <h2 className="font-display text-xl font-bold text-foreground">
-          Inventory
-        </h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Manage your equipment and stash. All gear is self-found — no vendors.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-display text-xl font-bold text-foreground">
+              Inventory
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              All gear is self-found — no vendors. Items found in dungeons.
+            </p>
+          </div>
+          <div
+            className={`text-sm font-semibold px-3 py-1.5 rounded-lg border ${
+              inventoryFull
+                ? "border-destructive/50 text-destructive bg-destructive/10"
+                : "border-border/50 text-muted-foreground bg-surface-2"
+            }`}
+          >
+            {inventoryCount} / {MAX_INVENTORY} items
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -121,6 +116,20 @@ export default function InventoryScreen({
         ))}
       </div>
 
+      {/* Inventory full warning */}
+      {inventoryFull && activeTab === "inventory" && (
+        <div
+          data-ocid="inventory.full.error_state"
+          className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive flex items-center gap-2"
+        >
+          <span>⚠️</span>
+          <span>
+            Inventory is full. Equip or discard items to make room for new
+            drops.
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Item Grid */}
         <div className="md:col-span-2 panel rounded-xl p-4">
@@ -130,21 +139,17 @@ export default function InventoryScreen({
               className="flex flex-col items-center justify-center h-48 text-muted-foreground/30"
             >
               <div className="text-4xl mb-3 opacity-50">
-                {activeTab === "inventory"
-                  ? "🎒"
-                  : activeTab === "stash"
-                    ? "📦"
-                    : "⚔️"}
+                {activeTab === "inventory" ? "🎒" : "⚔️"}
               </div>
               <div className="text-sm font-medium">
                 {activeTab === "inventory"
                   ? "No items in inventory"
-                  : activeTab === "stash"
-                    ? "Stash is empty"
-                    : "Nothing equipped"}
+                  : "Nothing equipped"}
               </div>
               <div className="text-xs mt-1 opacity-60">
-                Find gear by running dungeons!
+                {activeTab === "inventory"
+                  ? "Find gear by running dungeons!"
+                  : "Equip items from your inventory."}
               </div>
             </div>
           ) : (
@@ -196,27 +201,6 @@ export default function InventoryScreen({
                     Equip
                   </button>
                 )}
-
-                {!isEquipped &&
-                  (isInStash ? (
-                    <button
-                      type="button"
-                      data-ocid="inventory.move-from-stash.button"
-                      onClick={handleMoveFromStash}
-                      className="w-full py-2 rounded-lg bg-surface-2 text-muted-foreground hover:text-foreground text-sm font-semibold transition-all border border-border/30"
-                    >
-                      Move to Inventory
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      data-ocid="inventory.move-to-stash.button"
-                      onClick={handleMoveToStash}
-                      className="w-full py-2 rounded-lg bg-surface-2 text-muted-foreground hover:text-foreground text-sm font-semibold transition-all border border-border/30"
-                    >
-                      Move to Stash
-                    </button>
-                  ))}
               </div>
             </div>
           ) : (

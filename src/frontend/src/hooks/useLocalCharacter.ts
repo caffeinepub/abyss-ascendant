@@ -57,16 +57,17 @@ function saveStoredData(characterId: number, data: StoredCharacterData): void {
 }
 
 /**
- * Save starter equipment for a newly created character.
+ * Save starter equipment (and optional initial ability) for a newly created character.
  */
 export function saveStarterEquipmentForCharacter(
   characterId: number,
   weapon: GeneratedItem,
   armor: GeneratedItem,
+  initialAbilities?: string[],
 ): void {
   const existing = loadStoredData(characterId);
   const newStored: StoredCharacterData = {
-    equippedAbilities: existing?.equippedAbilities || [],
+    equippedAbilities: initialAbilities ?? existing?.equippedAbilities ?? [],
     abilities: existing?.abilities || [],
     equippedItems: [weapon, armor],
     inventory: existing?.inventory || [],
@@ -113,7 +114,29 @@ function buildLocalCharacter(
   const withBonus = applyClassStatBonus(baseStats, characterClass);
 
   const equippedItems = stored?.equippedItems || [];
-  const maxHp = calculateMaxHp(withBonus.vit);
+
+  // Sum equipment affix bonuses so they are reflected in effective stats
+  let equipStr = 0;
+  let equipDex = 0;
+  let equipInt = 0;
+  let equipVit = 0;
+  let equipBonusHp = 0;
+  for (const item of equippedItems) {
+    for (const affix of item.affixes ?? []) {
+      if (affix.stat === "str") equipStr += affix.value;
+      else if (affix.stat === "dex") equipDex += affix.value;
+      else if (affix.stat === "int") equipInt += affix.value;
+      else if (affix.stat === "vit") equipVit += affix.value;
+      else if (affix.stat === "hp") equipBonusHp += affix.value;
+    }
+  }
+
+  const effectiveStr = withBonus.str + equipStr;
+  const effectiveDex = withBonus.dex + equipDex;
+  const effectiveInt = withBonus.int + equipInt;
+  const effectiveVit = withBonus.vit + equipVit;
+  const maxHp = calculateMaxHp(effectiveVit, equipBonusHp);
+
   const backendCurrentHp = Number(backendChar.advancedStats.currentHP);
   const rawHp =
     currentHpOverride !== undefined ? currentHpOverride : backendCurrentHp;
@@ -162,10 +185,10 @@ function buildLocalCharacter(
     status: backendChar.status === "Dead" ? "Dead" : "Alive",
     baseStats,
     stats: {
-      str: withBonus.str,
-      dex: withBonus.dex,
-      int: withBonus.int,
-      vit: withBonus.vit,
+      str: effectiveStr,
+      dex: effectiveDex,
+      int: effectiveInt,
+      vit: effectiveVit,
       maxHp,
       currentHp,
       critChance: Number(backendChar.advancedStats.critChance) || 5,
@@ -268,7 +291,28 @@ export function useLocalCharacter(
         if (!prev) return prev;
         const characterClass = prev.class;
         const withBonus = applyClassStatBonus(newBaseStats, characterClass);
-        const maxHp = calculateMaxHp(withBonus.vit);
+
+        // Include equipment affix bonuses in effective stats
+        let equipStr = 0;
+        let equipDex = 0;
+        let equipInt = 0;
+        let equipVit = 0;
+        let equipBonusHp = 0;
+        for (const item of prev.equippedItems) {
+          for (const affix of item.affixes ?? []) {
+            if (affix.stat === "str") equipStr += affix.value;
+            else if (affix.stat === "dex") equipDex += affix.value;
+            else if (affix.stat === "int") equipInt += affix.value;
+            else if (affix.stat === "vit") equipVit += affix.value;
+            else if (affix.stat === "hp") equipBonusHp += affix.value;
+          }
+        }
+
+        const effectiveStr = withBonus.str + equipStr;
+        const effectiveDex = withBonus.dex + equipDex;
+        const effectiveInt = withBonus.int + equipInt;
+        const effectiveVit = withBonus.vit + equipVit;
+        const maxHp = calculateMaxHp(effectiveVit, equipBonusHp);
         const currentHp = Math.min(prev.stats.currentHp, maxHp);
         const unspentStatPoints = calculateUnspentStatPoints(
           prev.totalStatPointsEarned,
@@ -280,10 +324,10 @@ export function useLocalCharacter(
           baseStats: newBaseStats,
           stats: {
             ...prev.stats,
-            str: withBonus.str,
-            dex: withBonus.dex,
-            int: withBonus.int,
-            vit: withBonus.vit,
+            str: effectiveStr,
+            dex: effectiveDex,
+            int: effectiveInt,
+            vit: effectiveVit,
             maxHp,
             currentHp,
           },
@@ -321,9 +365,11 @@ export function useLocalCharacter(
     (
       equippedItems: GeneratedItem[],
       inventory: GeneratedItem[],
-      stash: GeneratedItem[],
+      _stash: GeneratedItem[], // stash removed; param kept for API compat
     ) => {
       if (characterId === null) return;
+      // Always cap inventory at 10; stash is always empty going forward
+      const cappedInventory = inventory.slice(0, 10);
       setLocalCharacter((prev) => {
         if (!prev) return prev;
         const stored = loadStoredData(characterId);
@@ -332,17 +378,47 @@ export function useLocalCharacter(
             stored?.equippedAbilities || prev.equippedAbilities,
           abilities: stored?.abilities || prev.abilities,
           equippedItems,
-          inventory,
-          stash,
+          inventory: cappedInventory,
+          stash: [],
         });
-        const maxHp = calculateMaxHp(prev.stats.vit);
+
+        // Recompute effective stats including new equipment affix bonuses
+        const withBonus = applyClassStatBonus(prev.baseStats, prev.class);
+        let equipStr = 0;
+        let equipDex = 0;
+        let equipInt = 0;
+        let equipVit = 0;
+        let equipBonusHp = 0;
+        for (const item of equippedItems) {
+          for (const affix of item.affixes ?? []) {
+            if (affix.stat === "str") equipStr += affix.value;
+            else if (affix.stat === "dex") equipDex += affix.value;
+            else if (affix.stat === "int") equipInt += affix.value;
+            else if (affix.stat === "vit") equipVit += affix.value;
+            else if (affix.stat === "hp") equipBonusHp += affix.value;
+          }
+        }
+        const effectiveStr = withBonus.str + equipStr;
+        const effectiveDex = withBonus.dex + equipDex;
+        const effectiveInt = withBonus.int + equipInt;
+        const effectiveVit = withBonus.vit + equipVit;
+        const maxHp = calculateMaxHp(effectiveVit, equipBonusHp);
         const currentHp = Math.min(prev.stats.currentHp, maxHp);
+
         return {
           ...prev,
           equippedItems,
-          inventory,
-          stash,
-          stats: { ...prev.stats, maxHp, currentHp },
+          inventory: cappedInventory,
+          stash: [],
+          stats: {
+            ...prev.stats,
+            str: effectiveStr,
+            dex: effectiveDex,
+            int: effectiveInt,
+            vit: effectiveVit,
+            maxHp,
+            currentHp,
+          },
         };
       });
     },
@@ -353,7 +429,12 @@ export function useLocalCharacter(
     (newXp: number, newLevel: number, remainingHp: number) => {
       setLocalCharacter((prev) => {
         if (!prev) return prev;
-        const newTotalEarned = newLevel - 1;
+        // Never allow totalStatPointsEarned to decrease — mirror backend Nat.max logic
+        const levelBasedEarned = newLevel - 1;
+        const newTotalEarned = Math.max(
+          prev.totalStatPointsEarned,
+          levelBasedEarned,
+        );
         const pendingStatPoints = calculateUnspentStatPoints(
           newTotalEarned,
           prev.totalStatPointsSpent,

@@ -38,7 +38,7 @@ interface CharacterCreationProps {
 }
 
 const TOTAL_STAT_POINTS = 8;
-type CreationStep = "class" | "details";
+type CreationStep = "class" | "details" | "ability";
 
 interface ClassInfo {
   id: CharacterClass;
@@ -60,7 +60,7 @@ const CLASSES: ClassInfo[] = [
     label: "Warrior",
     description:
       "A battle-hardened fighter who dominates the front lines with raw strength and unbreakable will.",
-    statBonus: "+3 Strength",
+    statBonus: "+6 Strength",
     statBonusKey: "str",
     icon: "⚔️",
     gradient:
@@ -75,7 +75,7 @@ const CLASSES: ClassInfo[] = [
     label: "Rogue",
     description:
       "A swift and deadly assassin who strikes from the shadows with precision and cunning.",
-    statBonus: "+3 Dexterity",
+    statBonus: "+6 Dexterity",
     statBonusKey: "dex",
     icon: "🗡️",
     gradient:
@@ -90,7 +90,7 @@ const CLASSES: ClassInfo[] = [
     label: "Mage",
     description:
       "A master of arcane arts who channels devastating magical forces to obliterate enemies.",
-    statBonus: "+3 Intelligence",
+    statBonus: "+6 Intelligence",
     statBonusKey: "int",
     icon: "🔮",
     gradient:
@@ -120,6 +120,7 @@ export default function CharacterCreation({
     int: 1,
     vit: 1,
   });
+  const [selectedAbility, setSelectedAbility] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{
     id: number;
@@ -159,6 +160,21 @@ export default function CharacterCreation({
     setStep("details");
   };
 
+  const handleProceedToAbility = () => {
+    if (!name.trim()) {
+      setError("Please enter a character name.");
+      return;
+    }
+    if (remainingPoints !== 0) {
+      setError(
+        `Allocate all ${TOTAL_STAT_POINTS} stat points (${remainingPoints} remaining).`,
+      );
+      return;
+    }
+    setError("");
+    setStep("ability");
+  };
+
   const handleCreate = async () => {
     if (!name.trim()) {
       setError("Please enter a character name.");
@@ -174,6 +190,10 @@ export default function CharacterCreation({
       );
       return;
     }
+    if (!selectedAbility) {
+      setError("Please choose a starting ability.");
+      return;
+    }
     setError("");
 
     const baseStats = applyClassStatBonus(
@@ -186,6 +206,20 @@ export default function CharacterCreation({
       selectedClass,
     );
 
+    // Build the backend ability object for the selected starting ability
+    const abilityData = ABILITIES.find((a) => a.name === selectedAbility);
+    const initialAbilityObjects = abilityData
+      ? [
+          {
+            name: abilityData.name,
+            description: abilityData.description,
+            type: abilityData.effectType,
+            element: abilityData.damageType,
+            power: BigInt(Math.round(abilityData.damageMultiplier * 100)),
+          },
+        ]
+      : [];
+
     try {
       const result = await createCharacterMutation.mutateAsync({
         name: name.trim(),
@@ -195,12 +229,18 @@ export default function CharacterCreation({
         dex: BigInt(baseStats.dex),
         int: BigInt(baseStats.int),
         vit: BigInt(baseStats.vit),
-        equippedAbilities: [],
+        equippedAbilities: initialAbilityObjects,
       });
 
       const characterId = typeof result === "number" ? result : 0;
       const { weapon, armor } = generateStarterEquipment();
-      saveStarterEquipmentForCharacter(characterId, weapon, armor);
+      // Save starter equipment AND the chosen ability to localStorage immediately
+      saveStarterEquipmentForCharacter(
+        characterId,
+        weapon,
+        armor,
+        selectedAbility ? [selectedAbility] : [],
+      );
       onCharacterCreated(characterId);
     } catch (err) {
       if (err instanceof CharacterLimitReachedError) {
@@ -247,22 +287,32 @@ export default function CharacterCreation({
             ⚔
           </div>
           <h1 className="font-display text-3xl text-foreground font-bold mb-1">
-            {step === "class" ? "Choose Your Path" : "Forge Your Legend"}
+            {step === "class"
+              ? "Choose Your Path"
+              : step === "details"
+                ? "Forge Your Legend"
+                : "Choose Your Starting Ability"}
           </h1>
           <p className="text-muted-foreground text-sm">
             {step === "class"
               ? "Your class defines your weapons, armor, and available abilities."
-              : "Claim your name and allocate your starting stats."}
+              : step === "details"
+                ? "Claim your name and allocate your starting stats."
+                : "Every hero begins with one ability. Choose wisely — you can unlock more as you level."}
           </p>
 
           {/* Step indicators */}
           <div className="flex items-center justify-center gap-3 mt-5">
             {[
-              { n: 1, label: "Choose Class", stepKey: "class" },
+              { n: 1, label: "Class", stepKey: "class" },
               { n: 2, label: "Details", stepKey: "details" },
+              { n: 3, label: "Ability", stepKey: "ability" },
             ].map(({ n, label, stepKey }, i) => {
               const isActive = step === stepKey;
-              const isDone = step === "details" && stepKey === "class";
+              const stepOrder = ["class", "details", "ability"];
+              const currentIdx = stepOrder.indexOf(step);
+              const thisIdx = stepOrder.indexOf(stepKey);
+              const isDone = currentIdx > thisIdx;
               return (
                 <React.Fragment key={stepKey}>
                   {i > 0 && (
@@ -665,15 +715,135 @@ export default function CharacterCreation({
                 <ChevronLeft className="w-4 h-4" />
                 Back
               </Button>
+              <Button
+                data-ocid="creation.continue_to_ability.button"
+                onClick={handleProceedToAbility}
+                disabled={!name.trim() || remainingPoints !== 0}
+                className="flex-1 flex items-center justify-center gap-2"
+                style={{
+                  background: "oklch(0.65 0.17 38)",
+                  color: "oklch(0.08 0.01 38)",
+                }}
+              >
+                Continue
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+        {/* ── Step 3: Ability Selection ────────────────────────────── */}
+        {step === "ability" && selectedClass && (
+          <div className="space-y-6">
+            {/* Class summary bar */}
+            {selectedClassInfo && (
+              <div
+                className={`flex items-center gap-3 rounded-xl border-2 ${selectedClassInfo.borderActive} ${selectedClassInfo.bgActive} p-3`}
+              >
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-xl border border-border/30"
+                  style={{ background: selectedClassInfo.gradient }}
+                >
+                  {selectedClassInfo.icon}
+                </div>
+                <div>
+                  <span
+                    className={`font-display font-bold text-sm ${selectedClassInfo.textActive}`}
+                  >
+                    {name} — {selectedClassInfo.label}
+                  </span>
+                  <p className="text-xs text-muted-foreground">
+                    Select 1 starting ability · Unlock more at levels 20, 40,
+                    60, 80
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Ability cards */}
+            <div className="space-y-2">
+              {classAbilities.map((ability) => {
+                const isSelected = selectedAbility === ability.name;
+                return (
+                  <button
+                    type="button"
+                    key={ability.id}
+                    data-ocid={`creation.ability.${ability.id}.button`}
+                    onClick={() => setSelectedAbility(ability.name)}
+                    className={`w-full text-left rounded-xl border-2 p-3 transition-all ${
+                      isSelected
+                        ? "border-accent bg-accent/15 shadow-sm shadow-accent/20"
+                        : "border-border/40 bg-surface-1 hover:border-border/70 hover:bg-surface-2 cursor-pointer"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`mt-0.5 p-2 rounded-lg text-xl flex-shrink-0 ${
+                          isSelected ? "bg-accent/20" : "bg-surface-2"
+                        }`}
+                      >
+                        {ability.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`font-semibold text-sm ${
+                              isSelected ? "text-accent" : "text-foreground"
+                            }`}
+                          >
+                            {ability.name}
+                          </span>
+                          {isSelected && (
+                            <span className="text-xs bg-accent/20 text-accent px-1.5 py-0.5 rounded-full font-medium">
+                              ✓ Selected
+                            </span>
+                          )}
+                          <span className="ml-auto text-xs text-muted-foreground capitalize">
+                            {ability.damageType} · {ability.effectType}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                          {ability.description}
+                        </p>
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <span className="text-xs text-orange-400 font-medium">
+                            {(ability.damageMultiplier * 100).toFixed(0)}%
+                            damage
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Scales: {ability.scalingStat.toUpperCase()}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            CD: {ability.cooldown}s
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {error && (
+              <p className="text-destructive text-sm bg-destructive/10 rounded-lg px-4 py-2">
+                {error}
+              </p>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                data-ocid="creation.back.button"
+                onClick={() => setStep("details")}
+                className="flex items-center gap-2 border-border/50"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Back
+              </Button>
               <button
                 type="button"
                 data-ocid="creation.submit_button"
                 onClick={handleCreate}
-                disabled={
-                  createCharacterMutation.isPending ||
-                  !name.trim() ||
-                  remainingPoints !== 0
-                }
+                disabled={createCharacterMutation.isPending || !selectedAbility}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-semibold text-sm transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
                   background: "oklch(0.65 0.17 38)",
